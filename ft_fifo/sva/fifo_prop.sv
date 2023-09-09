@@ -94,42 +94,50 @@ assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
 
+// SVA property file for fifo module
 
-property as__PushCorrectness;
-  @(posedge clk) in_val && in_rdy |-> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1;
+// Property 1: If in_hsk is high, buffer head pointer should increment.
+property pr__increment_head;
+    @(posedge clk) 
+    in_hsk |-> (fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1);
 endproperty
+as__increment_head : assert property (pr__increment_head);
 
-as__PushCorrectness : assert property (as__PushCorrectness);
-
-property as__PopCorrectness;
-  @(posedge clk) out_val && out_rdy |-> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1;
+// Property 2: If out_hsk is high, buffer tail pointer should increment.
+property pr__increment_tail;
+    @(posedge clk) 
+    out_hsk |-> (fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1);
 endproperty
+as__increment_tail : assert property (pr__increment_tail);
 
-as__PopCorrectness : assert property (as__PopCorrectness);
-
-property as__PushDataCorrectness;
-  @(posedge clk) in_hsk |-> buffer_data_r[fifo.buffer_head_r] == in_data;
+// Property 3: If in_hsk is high, incoming data is stored at the head location.
+property pr__store_data;
+    @(posedge clk) 
+    in_hsk |-> (fifo.buffer_data_r[fifo.buffer_head_r] == in_data);
 endproperty
+as__store_data : assert property (pr__store_data);
 
-as__PushDataCorrectness : assert property (as__PushDataCorrectness);
-
-property as__PopDataCorrectness;
-  @(posedge clk) out_hsk |-> out_data == $past(buffer_data_r[fifo.buffer_tail_r]);
+// Property 4: If out_hsk is high, data from tail of buffer is read.
+property pr__read_data;
+    @(posedge clk) 
+    out_hsk |-> ($past(out_data) == fifo.buffer_data_r[$past(fifo.buffer_tail_r)]);
 endproperty
+as__read_data : assert property (pr__read_data);
 
-as__PopDataCorrectness : assert property (as__PopDataCorrectness);
-
-property as__BufferFullness;
-  @(posedge clk) !in_rdy |-> (fifo.buffer_head_r - fifo.buffer_tail_r) == INFLIGHT - 1;
+// Property 5: out_val should be high if there's any valid data in the buffer.
+property pr__output_valid;
+    @(posedge clk) 
+    |fifo.buffer_val_r |-> out_val;
 endproperty
+as__output_valid : assert property (pr__output_valid);
 
-as__BufferFullness : assert property (as__BufferFullness);
-
-property as__BufferEmptyness;
-  @(posedge clk) !out_val |-> fifo.buffer_head_r == fifo.buffer_tail_r;
+// Property 6: in_rdy should be low only if the buffer is full.
+property pr__input_ready;
+    @(posedge clk) 
+    (&fifo.buffer_val_r) |-> (!in_rdy);
 endproperty
+as__input_ready : assert property (pr__input_ready);
 
-as__BufferEmptyness : assert property (as__BufferEmptyness);
 
 
 endmodule

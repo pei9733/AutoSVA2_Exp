@@ -40,7 +40,7 @@
 
 /*
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
-Give appropiate names to the assertions "as__<NAME> : assert" and make them as high-level as possible, avoid repeating implementation details.
+Give appropiate names to properties pr__<NAME> and assertions "as__<NAME> : assert" and make them as high-level as possible, avoid repeating implementation details.
 LEARN: signals declared within the AUTOSVA section are also usable in assertions.
 LEARN: to reference internal signals (not present in the module interface) you need to write the name of the module before the signal name, e.g., fifo.buffer_head_r
 LEARN: write all assertions within the same sva property file, but do not rewrite the module interface and do not add includes.
