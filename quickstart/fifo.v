@@ -64,6 +64,7 @@ module fifo
 );
 
 genvar j;
+// Note that the number of FIFO slots is always a power of 2
 localparam INFLIGHT = 2**INFLIGHT_IDX;
 
 reg [INFLIGHT    -1:0] buffer_val_r; 
@@ -85,6 +86,7 @@ always @(posedge clk) begin
         buffer_head_r <= {INFLIGHT_IDX{1'b0}};
         buffer_tail_r <= {INFLIGHT_IDX{1'b0}};
     end else begin
+        // The wrap-around is done by ignoring the MSB
         if (in_hsk) begin
             buffer_head_r <= buffer_head_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1};
         end
@@ -97,6 +99,7 @@ end
 generate
     for ( j = 0; j < INFLIGHT; j = j + 1) begin: buffers_gen
         always @(posedge clk) begin
+            // Bitmap of the FIFO slot that contain valid data.
             if (!rst_n) begin
               buffer_val_r [j] <= 1'b0;
             end else begin
