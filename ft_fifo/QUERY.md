@@ -1,57 +1,56 @@
-Given the `fifo` module, the goal is to create SystemVerilog Assertions (SVA) to check for the functionality of the module. 
+Given the code for a simple FIFO module, the module's primary functionalities are:
 
-Let's look at the key functionalities that need verification:
-1. FIFO buffer is never written to if it is full (`in_rdy` is low).
-2. FIFO buffer is never read from if it is empty (`out_val` is low).
-3. FIFO buffer behaves as a circular buffer with head and tail pointers.
-4. The data read from the FIFO is always the oldest data written to it (First In First Out).
+1. Buffer management: It should push data when `in_val` is high and `in_rdy` is also high, and pop data when `out_val` is high and `out_rdy` is also high.
+2. Correct data storage and retrieval: The data written into the FIFO should be the same as the data read out.
+3. The FIFO shouldn't accept new data when it's full and shouldn't produce data when it's empty.
 
-With this understanding, let's draft some SVA assertions:
+Based on these functionalities, here are the SVA assertions:
 
-```systemverilog
-module fifo
-    #( /*... existing parameters ... */ )
-    ( /*... existing I/O ports ... */ );
+1. **Empty and Full Conditions**: The FIFO shouldn't underflow or overflow.
+    ```systemverilog
+    assert property (@(posedge clk) disable iff (!rst_n) out_hsk |-> |buffer_val_r);
+    assert property (@(posedge clk) disable iff (!rst_n) in_hsk  |-> !(&buffer_val_r));
+    ```
 
-    //... existing module code ...
-
-    //====================== SVA Assertions ======================
-
-    // Assert that when 'in_rdy' is low, no handshake ('in_hsk') occurs.
-    // This means no write transaction occurs when FIFO is full.
-    assert property (@(posedge clk) disable iff (!rst_n) !in_rdy |-> !in_hsk);
-
-    // Assert that when 'out_val' is low, no handshake ('out_hsk') occurs.
-    // This means no read transaction occurs when FIFO is empty.
-    assert property (@(posedge clk) disable iff (!rst_n) !out_val |-> !out_hsk);
-
-    // Check the circular behavior of the FIFO pointers
-    // Assert that if the buffer_head_r reaches the maximum value, it wraps around.
+2. **Pointer Update Consistency**: Buffer pointers should wrap around correctly.
+    ```systemverilog
     assert property (@(posedge clk) disable iff (!rst_n) 
-                     (buffer_head_r == (INFLIGHT - 1)) && in_hsk |-> 
-                     (buffer_head_r == 0));
+                    (buffer_head_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_head_r iff !in_hsk);
 
-    // Assert that if the buffer_tail_r reaches the maximum value, it wraps around.
     assert property (@(posedge clk) disable iff (!rst_n) 
-                     (buffer_tail_r == (INFLIGHT - 1)) && out_hsk |-> 
-                     (buffer_tail_r == 0));
+                    (buffer_tail_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_tail_r iff !out_hsk);
+    ```
 
-    // Assert the data out is always the oldest data written into the FIFO.
-    // This is a bit tricky because FIFO works in a circular manner.
-    // The data is checked against the oldest data at the tail pointer.
+3. **Data Consistency**: If an item was added to the FIFO, the data should remain there until it's read out.
+    ```systemverilog
+    foreach (buffer_data_r[j]) begin
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        ($rose(add_buffer[j]) |-> (buffer_data_r[j] == in_data)));
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        (out_hsk && buffer_tail_r == j |-> (out_data == buffer_data_r[j])));
+    end
+    ```
 
-    always @(posedge clk)
-        if (out_hsk)
-            fifo.out_data == fifo.buffer_data_r[fifo.buffer_tail_r];
+4. **Data Validity on Output**: If `out_val` is high, then there must be at least one valid data in the FIFO.
+    ```systemverilog
+    assert property (@(posedge clk) disable iff (!rst_n)
+                    out_val |-> |buffer_val_r);
+    ```
 
-    // Ensure that the FIFO can store up to INFLIGHT number of items and no more.
-    always @(posedge clk)
-        $countones(fifo.buffer_val_r) <= INFLIGHT;
+5. **Data Ready on Input**: The `in_rdy` signal should reflect the fullness of the FIFO.
+    ```systemverilog
+    assert property (@(posedge clk) disable iff (!rst_n)
+                    in_rdy |-> !(&buffer_val_r));
+    ```
 
-endmodule
-```
+6. **Buffer Clear and Add**:
+    ```systemverilog
+    foreach (buffer_val_r[j]) begin
+        assert property (@(posedge clk) disable iff (!rst_n) 
+                        add_buffer[j] |-> buffer_val_r[j]);
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        clr_buffer[j] |-> !buffer_val_r[j]);
+    end
+    ```
 
-Note:
-- The SVA assertions will aid in checking the functional correctness of the `fifo` module.
-- However, this is a high-level functional check. Depending on the specific requirements, additional assertions and/or more detailed verification might be necessary. 
-- The final data check (FIFO property) is done using procedural code because comparing across multiple cycles using SVA properties is more complex and might need additional logic or state variables.
+These assertions should help in validating the main functionalities of the FIFO module. However, one might need to adjust or add more assertions based on additional requirements or edge cases in the design.

@@ -94,59 +94,32 @@ assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
 
-// // Ensure FIFO doesn't overfill
-// assert property (@(posedge clk) disable iff (!rst_n) (in_val && !in_rdy) |-> !(buffer_head_r + 1 == buffer_tail_r));
+assert property (@(posedge clk) disable iff (!rst_n) out_hsk |-> |buffer_val_r);
+assert property (@(posedge clk) disable iff (!rst_n) in_hsk  |-> !(&buffer_val_r));
 
-// // Ensure FIFO doesn't underflow
-// assert property (@(posedge clk) disable iff (!rst_n) (out_val && !out_rdy) |-> buffer_tail_r != buffer_head_r);
 
-// // Ensure data integrity
-// int idx = 0;
-// always @(posedge clk) begin
-//     if (in_val && in_rdy) begin
-//         idx = buffer_head_r;
-//     end
-//     if (out_val && out_rdy) begin
-//         assert (out_data == buffer_data_r[idx]);
-//         idx = (idx + 1) % (2**INFLIGHT_IDX);
-//     end
-// end
+assert property (@(posedge clk) disable iff (!rst_n) 
+				(buffer_head_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_head_r iff !in_hsk);
 
-// // Check handshake mechanism for input
-// assert property (@(posedge clk) disable iff (!rst_n) in_val && in_rdy |-> (buffer_head_r == (buffer_head_r + 1) % (2**INFLIGHT_IDX)));
+assert property (@(posedge clk) disable iff (!rst_n) 
+				(buffer_tail_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_tail_r iff !out_hsk);
 
-// // Check handshake mechanism for output
-// assert property (@(posedge clk) disable iff (!rst_n) out_val && out_rdy |-> (buffer_tail_r == (buffer_tail_r + 1) % (2**INFLIGHT_IDX)));
 
-    // Assert that when 'in_rdy' is low, no handshake ('in_hsk') occurs.
-    // This means no write transaction occurs when FIFO is full.
-    assert property (@(posedge clk) disable iff (!rst_n) !in_rdy |-> !in_hsk);
+assert property (@(posedge clk) disable iff (!rst_n)
+				out_val |-> |buffer_val_r);
 
-    // Assert that when 'out_val' is low, no handshake ('out_hsk') occurs.
-    // This means no read transaction occurs when FIFO is empty.
-    assert property (@(posedge clk) disable iff (!rst_n) !out_val |-> !out_hsk);
 
-    // Check the circular behavior of the FIFO pointers
-    // Assert that if the buffer_head_r reaches the maximum value, it wraps around.
-    assert property (@(posedge clk) disable iff (!rst_n) 
-                     (buffer_head_r == (INFLIGHT - 1)) && in_hsk |-> 
-                     (buffer_head_r == 0));
 
-    // Assert that if the buffer_tail_r reaches the maximum value, it wraps around.
-    assert property (@(posedge clk) disable iff (!rst_n) 
-                     (buffer_tail_r == (INFLIGHT - 1)) && out_hsk |-> 
-                     (buffer_tail_r == 0));
+assert property (@(posedge clk) disable iff (!rst_n)
+				in_rdy |-> !(&buffer_val_r));
 
-    // Assert the data out is always the oldest data written into the FIFO.
-    // This is a bit tricky because FIFO works in a circular manner.
-    // The data is checked against the oldest data at the tail pointer.
 
-    always @(posedge clk)
-        if (out_hsk)
-            fifo.out_data == fifo.buffer_data_r[fifo.buffer_tail_r];
 
-    // Ensure that the FIFO can store up to INFLIGHT number of items and no more.
-    always @(posedge clk)
-        $countones(fifo.buffer_val_r) <= INFLIGHT;
+foreach (buffer_val_r[j]) begin
+	assert property (@(posedge clk) disable iff (!rst_n) 
+					add_buffer[j] |-> buffer_val_r[j]);
+	assert property (@(posedge clk) disable iff (!rst_n)
+					clr_buffer[j] |-> !buffer_val_r[j]);
+end
 
 endmodule
