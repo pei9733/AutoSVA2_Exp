@@ -46,6 +46,8 @@ LEARN: to reference internal signals (not present in the module interface) you n
 LEARN: write all assertions within the same sva property file, but do not rewrite the module interface and do not add includes.
 LEARN: |-> is a same-cycle assertion (the antecedent and consequent are evaluated in the same cycle)
 LEARN: |=> is a next-cycle assertion (the antecedent is evaluated in the current cycle and the consequent in the next cycle)
+LEARN: signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle
+LEARN: signals not ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
 */
 
 module fifo
