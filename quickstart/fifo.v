@@ -40,6 +40,8 @@
 
 /*
 Write SVA assertions to check correctness of ALL the functionality of this module
+NOTE that signals declared within the AUTOSVA section are also usable.
+NOTE that to reference internal signals (not present in the module interface) you need to write the name of the module before the signal name, followed by a '.'
 */
 
 module fifo
