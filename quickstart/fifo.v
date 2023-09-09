@@ -124,11 +124,18 @@ endmodule
 /*
 RULES:
 SVA assertions are written within a property file, but DO NOT rewrite the module interface and DO NOT add includes in the property file (as we already have them in the property file).
-DO NOT declare properties, ONLY assertions named as__<NAME>: assert property (<EXPRESSION>). DO NOT use [] within NAME. Do not add @(posedge clk) to EXPRESSION.
+DO NOT declare properties, ONLY assertions named as__<NAME>: assert property (<EXPRESSION>).
+DO NOT use [] within assertion NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 
-In a same-cycle assertion (|->): the precondition and postcondition are evaluated in the same cycle.
-In a next-cycle assertion (|=>): the precondition is evaluated in the current cycle and the postcondition in the next cycle.
+&bitarray means that ALL the bits  are ONES.
+!(&bitarray) means it's NOT TRUE that ALL the bits are ONES, i.e., SOME of the bits are ZEROS.
+|bitarray means that SOME bits is ONES.
+!(|bitarray) means that NONE of the bits are ONES, i.e., ALL the bits are ZEROS.
+Constants MUSH ALWAYS have width, e.g., <WIDTH>'d<VALUE> for decimal constants.
+
+Same-cycle assertions (|->): the precondition and postcondition are evaluated in the same cycle.
+Next-cycle assertions (|=>): the precondition is evaluated in the current cycle and the postcondition in the next cycle.
 Signals ending in _flipflop are flip-flops: the updated value becomes available in the next cycle.
 Signals NOT ending in _flipflop are wires: the assigned value is available in the current cycle.
 The assigned value to wires (signals NOT ending in _flipflop) is available in the current cycle.
@@ -140,14 +147,13 @@ When referencing wires on the postcondition of a next-cycle assertion (|=>), USE
 When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we DO NOT USE $past() to refer to the updated value of the flip-flop.
 When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we USE $past() to refer to the value of the flip-flop on the cycle of the precondition.
 When referencing flip-flops on the postcondition of a same-cycle assertion (|->), we DO NOT USE $past() to refer to the current value of the flip-flop (before the update).
+Assertions without precondition DO NOT use |->
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
 Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
 NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
 EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
 Do not use foreach loops in assertions; Instead, use generate loops.
-!&bitarray means that not all bits in bitarray are 1. !(|bitarray) means that not any bit in bitarray is 1.
-When using constants, ALWAYS define the width: <WIDTH>'d<VALUE> for decimal constants.
 
 TASK:
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.

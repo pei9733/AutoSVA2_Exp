@@ -1,70 +1,79 @@
 ```sv
-// SVA Property File for fifo module
+// fifo_properties.sva
+// SVA assertions for the FIFO module
 
-// Assertion to ensure that if there is an input handshake (in_hsk), then the appropriate buffer will be added to.
-as_fifo_add_buffer_on_in_hsk: assert property (
-    fifo.in_hsk |-> fifo.add_buffer[fifo.buffer_head_flipflop] == 1'b1
+// Check if handshake happens, the head of the buffer will increment
+as__head_increment:
+assert property (
+    fifo.in_hsk |=> fifo.buffer_head_flipflop == $past(fifo.buffer_head_flipflop) + INFLIGHT_IDX'1
 );
 
-// Assertion to ensure that if there is an output handshake (out_hsk), then the appropriate buffer will be cleared.
-as_fifo_clear_buffer_on_out_hsk: assert property (
-    fifo.out_hsk |-> fifo.clr_buffer[fifo.buffer_tail_flipflop] == 1'b1
+// Check if handshake happens on the output, the tail of the buffer will increment
+as__tail_increment:
+assert property (
+    fifo.out_hsk |=> fifo.buffer_tail_flipflop == $past(fifo.buffer_tail_flipflop) + INFLIGHT_IDX'1
 );
 
-// Assertion to check the correct update of buffer_head_flipflop when there is an input handshake.
-as_fifo_buffer_head_flipflop_update_on_in_hsk: assert property (
-    fifo.in_hsk |=> fifo.buffer_head_flipflop == $past(fifo.buffer_head_flipflop) + 1
-);
-
-// Assertion to check the correct update of buffer_tail_flipflop when there is an output handshake.
-as_fifo_buffer_tail_flipflop_update_on_out_hsk: assert property (
-    fifo.out_hsk |=> fifo.buffer_tail_flipflop == $past(fifo.buffer_tail_flipflop) + 1
-);
-
-// Assertion to ensure buffer value flip-flop is correctly updated when data is added.
+// Check data consistency: If data is added to the buffer, it should match the input data on the same cycle
 generate
-    for (genvar j = 0; j < 2**fifo.INFLIGHT_IDX; j = j + 1) begin: buffer_val_flipflop_update
-        as_fifo_buffer_val_flipflop_update_on_add: assert property (
-            fifo.add_buffer[j] |=> fifo.buffer_val_flipflop[j] == 1'b1
-        );
-
-        // Assertion to ensure buffer value flip-flop is correctly updated when data is cleared.
-        as_fifo_buffer_val_flipflop_update_on_clr: assert property (
-            fifo.clr_buffer[j] |=> fifo.buffer_val_flipflop[j] == 1'b0
-        );
-
-        // Assertion to ensure that the buffer data flip-flop is correctly updated with input data when data is added.
-        as_fifo_buffer_data_flipflop_update_on_add: assert property (
-            fifo.add_buffer[j] |=> fifo.buffer_data_flipflop[j] == $past(fifo.in_data)
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
+        as__data_consistency_0:
+        assert property (
+            fifo.add_buffer[i] |-> fifo.buffer_data_flipflop[i] == fifo.in_data
         );
     end
 endgenerate
 
-// Assertion to check that out_data correctly references the buffer data flip-flop based on buffer_tail_flipflop.
-as_fifo_out_data_correctly_references_buffer: assert property (
-    |-> fifo.out_data == fifo.buffer_data_flipflop[fifo.buffer_tail_flipflop]
+// If all buffer slots are filled (all are ones), input is not ready
+as__in_rdy_assert:
+assert property (
+    (&fifo.buffer_val_flipflop) |-> !fifo.in_rdy
 );
 
-// Assertion to check that out_val is high if any buffer is valid.
-as_fifo_out_val_high_on_any_buffer_valid: assert property (
-    !(|fifo.buffer_val_flipflop) |-> fifo.out_val == 1'b0
+// If none of the buffer slots are filled (all are zeroes), output is not valid
+as__out_val_assert:
+assert property (
+    !(|fifo.buffer_val_flipflop) |-> !fifo.out_val
 );
 
-// Assertion to check that out_val is low if all buffers are invalid.
-as_fifo_out_val_low_on_all_buffer_invalid: assert property (
-    !&fifo.buffer_val_flipflop |-> fifo.out_val == 1'b1
+// If there's any buffer slot filled (some are ones), output is valid
+as__out_val_positive_assert:
+assert property (
+    (|fifo.buffer_val_flipflop) |-> fifo.out_val
 );
 
-// Assertion to ensure that in_rdy is low if all buffers are valid (full).
-as_fifo_in_rdy_low_on_all_buffer_valid: assert property (
-    &fifo.buffer_val_flipflop |-> fifo.in_rdy == 1'b0
+// If an output handshake happens, then there must be a valid data to be sent out from the buffer 
+as__out_hsk_valid_data:
+assert property (
+    fifo.out_hsk |-> |fifo.buffer_val_flipflop
 );
 
-// Assertion to ensure that in_rdy is high if any buffer is invalid (not full).
-as_fifo_in_rdy_high_on_any_buffer_invalid: assert property (
-    !(|fifo.buffer_val_flipflop) |-> fifo.in_rdy == 1'b1
+// Check that the data sent out matches the data from the buffer's tail
+as__out_data_match:
+assert property (
+    fifo.out_hsk |-> fifo.out_data == fifo.buffer_data_flipflop[fifo.buffer_tail_flipflop]
 );
+
+// Check if a slot is cleared on an output handshake, it should no longer contain valid data in the next cycle
+generate
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
+        as__slot_clear_0:
+        assert property (
+            fifo.clr_buffer[i] |=> !fifo.buffer_val_flipflop[i]
+        );
+    end
+endgenerate
+
+// Check that when data is added to a slot in the buffer, it should contain valid data in the next cycle
+generate
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
+        as__slot_data_add_0:
+        assert property (
+            fifo.add_buffer[i] |=> fifo.buffer_val_flipflop[i]
+        );
+    end
+endgenerate
 
 ```
 
-The above property file contains SVA assertions to ensure the correct functionality of the provided FIFO module.
+Note: These assertions capture the functionality of the described FIFO module excluding the reset behavior.
