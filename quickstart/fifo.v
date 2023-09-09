@@ -38,6 +38,10 @@
 //  (better timing and area, but 1 cycle delay between entrance and exit)
 //==================================================================================================
 
+/*
+Write SVA assertions to check correctness of ALL the functionality of this module
+*/
+
 module fifo
   #(
     // Configuration Parameters

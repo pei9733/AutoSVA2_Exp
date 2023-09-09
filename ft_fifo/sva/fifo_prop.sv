@@ -93,4 +93,29 @@ assign out_transid = fifo.buffer_tail_r;
 assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
+
+// Ensure FIFO doesn't overfill
+assert property (@(posedge clk) disable iff (!rst_n) (in_val && !in_rdy) |-> !(buffer_head_r + 1 == buffer_tail_r));
+
+// Ensure FIFO doesn't underflow
+assert property (@(posedge clk) disable iff (!rst_n) (out_val && !out_rdy) |-> buffer_tail_r != buffer_head_r);
+
+// Ensure data integrity
+int idx = 0;
+always @(posedge clk) begin
+    if (in_val && in_rdy) begin
+        idx = buffer_head_r;
+    end
+    if (out_val && out_rdy) begin
+        assert (out_data == buffer_data_r[idx]);
+        idx = (idx + 1) % (2**INFLIGHT_IDX);
+    end
+end
+
+// Check handshake mechanism for input
+assert property (@(posedge clk) disable iff (!rst_n) in_val && in_rdy |-> (buffer_head_r == (buffer_head_r + 1) % (2**INFLIGHT_IDX)));
+
+// Check handshake mechanism for output
+assert property (@(posedge clk) disable iff (!rst_n) out_val && out_rdy |-> (buffer_tail_r == (buffer_tail_r + 1) % (2**INFLIGHT_IDX)));
+
 endmodule
