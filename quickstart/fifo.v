@@ -143,16 +143,16 @@ USE a same-cycle assertion (|->) to reason about behavior ocurring in the same c
 USE a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a _reg.
 USE same-cycle assertions (|->) when reasoning about the assigned value of wires (signals NOT ending in _reg).
 USE next-cycle assertions (|=>) when reasoning about the updated value of a _reg.
-When referencing wires on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the wires on the cycle of the precondition.
-When referencing _reg on the postcondition of a next-cycle assertion (|=>), DO NOT USE $past() to refer to the updated value of the _reg.
-When referencing _reg on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the _reg on the cycle of the precondition.
-When referencing _reg on the postcondition of a same-cycle assertion (|->), DO NOT USE $past() to refer to the current value of the _reg (before the update).
+DO NOT USE $past() in preconditions, only in postconditions.
+DO NOT USE $past() on the postcondition of same-cycle assertion (|->).
+On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the value of wires.
+On the postcondition of next-cycle assertions (|=>), DO NOT USE $past() to refer to the updated value of _reg.
+On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the value of the _reg on the cycle of the precondition, before the register update.
 Assertions without precondition DO NOT use |->
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
-Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
+Referencing internal signals in the property file ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
 NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
-EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
 DO NOT use foreach loops in assertions; Instead, use generate loops.
 
 TASK:

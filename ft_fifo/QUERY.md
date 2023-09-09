@@ -1,36 +1,57 @@
 ```sv
-// Property File for the fifo module
+// Property File
 
-// Ensure that if the input is valid and the FIFO is ready to accept the input, the next position in the FIFO is updated.
-as__in_hsk_buffer_head_update: assert property (fifo.in_hsk |=> fifo.buffer_head_reg == $past(fifo.buffer_head_reg) + 1'b1);
+// Check: When there's an input handshake, the next value of buffer_head_reg increments.
+as__buffer_head_increment: assert property (
+    fifo.in_hsk |=> fifo.buffer_head_reg == $past(fifo.buffer_head_reg + 1'b1)
+);
 
-// Ensure that if the output is valid and ready to be taken, the position of the next data to be read from the FIFO is updated.
-as__out_hsk_buffer_tail_update: assert property (fifo.out_hsk |=> fifo.buffer_tail_reg == $past(fifo.buffer_tail_reg) + 1'b1);
+// Check: When there's an output handshake, the next value of buffer_tail_reg increments.
+as__buffer_tail_increment: assert property (
+    fifo.out_hsk |=> fifo.buffer_tail_reg == $past(fifo.buffer_tail_reg + 1'b1)
+);
 
-// Ensure that when data is written into the FIFO, it is stored in the correct slot.
+// Check: When the FIFO is empty (all buffer values are zero), out_val signal should be 0.
+as__out_val_when_empty: assert property (
+    !(|fifo.buffer_val_reg) |-> !fifo.out_val
+);
+
+// Check: When the FIFO is full (all buffer values are one), in_rdy signal should be 0.
+as__in_rdy_when_full: assert property (
+    &fifo.buffer_val_reg |-> !fifo.in_rdy
+);
+
+// Check: If an add_buffer flag is set for a specific index, the corresponding buffer_val_reg should be set in the next cycle.
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin : check_data_storage
-        // If a slot is selected to add data, the next cycle that slot should have the input data.
-        as__add_data_to_buffer: assert property (fifo.add_buffer[i] |=> fifo.buffer_data_reg[i] == $past(fifo.in_data));
-
-        // If a slot is being cleared (data is being read), it should have been valid before.
-        as__clear_buffer_validity: assert property (fifo.clr_buffer[i] |=> $past(fifo.buffer_val_reg[i]));
-
-        // Ensure that if a slot is selected to add data, it becomes valid in the next cycle.
-        as__add_data_buffer_valid: assert property (fifo.add_buffer[i] |=> fifo.buffer_val_reg[i]);
-
-        // If a slot was previously valid and is not being cleared, it remains valid.
-        as__retain_data_in_buffer: assert property (($past(fifo.buffer_val_reg[i]) && !fifo.clr_buffer[i]) |=> fifo.buffer_val_reg[i]);
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_add_buffer_set
+        as__buffer_val_set_when_add_buffer: assert property (
+            fifo.add_buffer[i] |=> fifo.buffer_val_reg[i]
+        );
     end
 endgenerate
 
-// Ensure that the output data corresponds to the data in the slot pointed by buffer_tail_reg.
-as__out_data_matches_tail: assert property (fifo.out_val |-> fifo.out_data == fifo.buffer_data_reg[fifo.buffer_tail_reg]);
+// Check: If an clr_buffer flag is set for a specific index, the corresponding buffer_val_reg should be clear in the next cycle.
+generate
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_clr_buffer_clear
+        as__buffer_val_clear_when_clr_buffer: assert property (
+            fifo.clr_buffer[i] |=> !fifo.buffer_val_reg[i]
+        );
+    end
+endgenerate
 
-// Ensure the FIFO indicates it's not empty if any of its slots are valid.
-as__fifo_non_empty: assert property (|fifo.buffer_val_reg |-> fifo.out_val);
+// Check: When add_buffer flag is set for an index, the next value of buffer_data_reg at that index should be in_data.
+generate
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_buffer_data_when_add_buffer
+        as__buffer_data_set_when_add_buffer: assert property (
+            fifo.add_buffer[i] |=> fifo.buffer_data_reg[i] == $past(fifo.in_data)
+        );
+    end
+endgenerate
 
-// Ensure that the FIFO indicates it's ready to accept data if not all of its slots are valid.
-as__fifo_ready_to_accept: assert property (!(&fifo.buffer_val_reg) |-> fifo.in_rdy);
+// Check: out_data should always be the value of buffer_data_reg at the index of buffer_tail_reg.
+as__out_data_matches_tail_data: assert property (
+    fifo.out_data == fifo.buffer_data_reg[fifo.buffer_tail_reg]
+);
+
 ```
-Note: This set of assertions covers the module functionality based on the provided details and does not include reset behaviors.
+Note: The given properties cover a wide range of the FIFO's behaviors. It's important to test these assertions in a testbench with various scenarios to ensure they capture the intended functionality of the FIFO.
