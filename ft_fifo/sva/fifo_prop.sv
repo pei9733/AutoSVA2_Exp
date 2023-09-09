@@ -90,8 +90,8 @@ end
 as__fifo_transid_data_unique: assert property (|fifo_transid_sampled |-> !fifo_transid_set);
 as__fifo_transid_data_integrity: assert property (|fifo_transid_sampled && fifo_transid_response |-> (out_data == fifo_transid_data_model));
 
-assign out_transid = fifo.buffer_tail_r;
-assign in_transid = fifo.buffer_head_r;
+assign out_transid = fifo.buffer_tail_flipflop;
+assign in_transid = fifo.buffer_head_flipflop;
 
 //====DESIGNER-ADDED-SVA====//
 
@@ -99,65 +99,53 @@ assign in_transid = fifo.buffer_head_r;
 
 
 
+// Property File for the fifo module
 
-// fifo_properties.sv
-// SVA property file for module fifo
+// Assertion to check the behavior of buffer_head_flipflop when in_hsk is true
+as__buffer_head_update: 
+  assert property (fifo.in_hsk |=> fifo.buffer_head_flipflop == $past(fifo.buffer_head_flipflop) + 1'b1);
 
-// Check if when there's an input handshake, the next buffer slot is incremented by 1 (taking into account the wrap-around)
-as__buffer_head_increment: 
-assert property (
-    fifo.in_hsk |=> fifo.buffer_head_r == ($past(fifo.buffer_head_r) + 1'b1) % INFLIGHT
-);
+// Assertion to check the behavior of buffer_tail_flipflop when out_hsk is true
+as__buffer_tail_update: 
+  assert property (fifo.out_hsk |=> fifo.buffer_tail_flipflop == $past(fifo.buffer_tail_flipflop) + 1'b1);
 
-// Check if when there's an output handshake, the next tail buffer slot is incremented by 1 (taking into account the wrap-around)
-as__buffer_tail_increment: 
-assert property (
-    fifo.out_hsk |=> fifo.buffer_tail_r == ($past(fifo.buffer_tail_r) + 1'b1) % INFLIGHT
-);
-
-// Check if data is correctly stored in buffer upon input handshake
-generate 
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
-        as__buffer_data_store: 
-        assert property (
-            fifo.add_buffer[i] |-> fifo.buffer_data_r[i] == $past(fifo.in_data)
-        );
-    end
+// Assertion to ensure that when data is written (add_buffer is true), it is stored correctly in the buffer_data_flipflop
+genvar i;
+generate
+  for (i = 0; i < 2**fifo.INFLIGHT_IDX; i = i + 1) begin : buffer_data_gen
+    as__buffer_data_update: 
+      assert property (fifo.add_buffer[i] |=> fifo.buffer_data_flipflop[i] == $past(fifo.in_data));
+  end
 endgenerate
 
-// Check that buffer value bit is set upon input handshake and remains set until cleared by output handshake
-generate 
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
-        as__buffer_val_set: 
-        assert property (
-            fifo.add_buffer[i] |-> fifo.buffer_val_r[i] == 1'b1
-        );
-
-        as__buffer_val_clear: 
-        assert property (
-            fifo.clr_buffer[i] && !fifo.add_buffer[i] |-> fifo.buffer_val_r[i] == 1'b0
-        );
-    end
+// Assertion to ensure the correct behavior of buffer_val_flipflop when add_buffer or clr_buffer is active
+generate
+  for (i = 0; i < 2**fifo.INFLIGHT_IDX; i = i + 1) begin : buffer_val_gen
+    as__buffer_val_set: 
+      assert property (fifo.add_buffer[i] |=> fifo.buffer_val_flipflop[i] == 1'b1);
+    
+    as__buffer_val_clear: 
+      assert property (fifo.clr_buffer[i] && !fifo.add_buffer[i] |=> fifo.buffer_val_flipflop[i] == 0);
+    
+    as__buffer_val_unchanged: 
+      assert property (!fifo.add_buffer[i] && !fifo.clr_buffer[i] |=> fifo.buffer_val_flipflop[i] == $past(fifo.buffer_val_flipflop[i]));
+  end
 endgenerate
 
-// Check that when FIFO is not full, in_rdy signal should be asserted
-as__input_ready: 
-assert property (
-    fifo.in_val && !&fifo.buffer_val_r |-> fifo.in_rdy == 1'b1
-);
+// Assertion to ensure that the out_data is always equal to the data stored at buffer_tail_flipflop's position in buffer_data_flipflop
+as__out_data_correctness: 
+  assert property (fifo.out_val |-> fifo.out_data == fifo.buffer_data_flipflop[fifo.buffer_tail_flipflop]);
 
-// Check that when FIFO has any valid data, out_val signal should be asserted
-as__output_valid: 
-assert property (
-    |fifo.buffer_val_r |-> fifo.out_val == 1'b1
-);
+// Assertion to ensure that out_val is true if there is any valid data in buffer_val_flipflop
+as__out_val_correctness: 
+  assert property (|fifo.buffer_val_flipflop |-> fifo.out_val == 1'b1);
 
-// Check that the output data corresponds to the tail of the buffer
-as__output_data: 
-assert property (
-    fifo.out_val |-> fifo.out_data == fifo.buffer_data_r[fifo.buffer_tail_r]
-);
-
+// Assertion to ensure that in_rdy is false only if all buffer slots are full
+as__in_rdy_correctness: 
+  assert property (!&fifo.buffer_val_flipflop |-> fifo.in_rdy == 1'b1);
+  
+as__in_rdy_full: 
+  assert property (&fifo.buffer_val_flipflop |-> fifo.in_rdy == 0);
 
 
 

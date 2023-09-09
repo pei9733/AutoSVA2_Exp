@@ -51,8 +51,8 @@ module fifo
     input  wire                          rst_n,
     /*AUTOSVA
     fifo: in -IN> out
-    [INFLIGHT_IDX-1:0] in_transid = fifo.buffer_head_r
-    [INFLIGHT_IDX-1:0] out_transid = fifo.buffer_tail_r
+    [INFLIGHT_IDX-1:0] in_transid = fifo.buffer_head_flipflop
+    [INFLIGHT_IDX-1:0] out_transid = fifo.buffer_tail_flipflop
     */
     input  wire                          in_val,
     output wire                          in_rdy,
@@ -67,10 +67,10 @@ genvar j;
 // Note that the number of FIFO slots is always a power of 2
 localparam INFLIGHT = 2**INFLIGHT_IDX;
 
-reg [INFLIGHT    -1:0] buffer_val_r; 
-reg [INFLIGHT_IDX-1:0] buffer_head_r;
-reg [INFLIGHT_IDX-1:0] buffer_tail_r;
-reg [SIZE-1:0][INFLIGHT-1:0] buffer_data_r;
+reg [INFLIGHT    -1:0] buffer_val_flipflop;
+reg [INFLIGHT_IDX-1:0] buffer_head_flipflop;
+reg [INFLIGHT_IDX-1:0] buffer_tail_flipflop;
+reg [SIZE-1:0][INFLIGHT-1:0] buffer_data_flipflop;
 
 // Hanshake
 wire in_hsk  = in_val && in_rdy;
@@ -78,20 +78,20 @@ wire out_hsk = out_val && out_rdy;
 
 wire [INFLIGHT-1:0] add_buffer;
 wire [INFLIGHT-1:0] clr_buffer;
-assign add_buffer = ({{INFLIGHT-1{1'b0}}, 1'b1} << buffer_head_r) & {INFLIGHT{in_hsk}};
-assign clr_buffer = ({{INFLIGHT-1{1'b0}}, 1'b1} << buffer_tail_r) & {INFLIGHT{out_hsk}};
+assign add_buffer = ({{INFLIGHT-1{1'b0}}, 1'b1} << buffer_head_flipflop) & {INFLIGHT{in_hsk}};
+assign clr_buffer = ({{INFLIGHT-1{1'b0}}, 1'b1} << buffer_tail_flipflop) & {INFLIGHT{out_hsk}};
 
 always @(posedge clk) begin
     if (!rst_n) begin
-        buffer_head_r <= {INFLIGHT_IDX{1'b0}};
-        buffer_tail_r <= {INFLIGHT_IDX{1'b0}};
+        buffer_head_flipflop <= {INFLIGHT_IDX{1'b0}};
+        buffer_tail_flipflop <= {INFLIGHT_IDX{1'b0}};
     end else begin
         // The wrap-around is done by ignoring the MSB
         if (in_hsk) begin
-            buffer_head_r <= buffer_head_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1};
+            buffer_head_flipflop <= buffer_head_flipflop + {{INFLIGHT_IDX-1{1'b0}}, 1'b1};
         end
         if (out_hsk) begin
-            buffer_tail_r <= buffer_tail_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1};
+            buffer_tail_flipflop <= buffer_tail_flipflop + {{INFLIGHT_IDX-1{1'b0}}, 1'b1};
         end
     end
 end
@@ -101,23 +101,23 @@ generate
         always @(posedge clk) begin
             // Bitmap of the FIFO slot that contain valid data.
             if (!rst_n) begin
-              buffer_val_r [j] <= 1'b0;
+              buffer_val_flipflop [j] <= 1'b0;
             end else begin
-              buffer_val_r[j] <= add_buffer[j] || buffer_val_r[j] && !clr_buffer[j];
+              buffer_val_flipflop[j] <= add_buffer[j] || buffer_val_flipflop[j] && !clr_buffer[j];
             end
         end
 
         always @(posedge clk) begin
             if (add_buffer[j]) begin
-                buffer_data_r[j] <= in_data;
+                buffer_data_flipflop[j] <= in_data;
             end 
         end
     end
 endgenerate
 
-assign out_data = buffer_data_r[buffer_tail_r];
-assign out_val  = |buffer_val_r;
-assign in_rdy  = !(&buffer_val_r);
+assign out_data = buffer_data_flipflop[buffer_tail_flipflop];
+assign out_val  = |buffer_val_flipflop;
+assign in_rdy  = !(&buffer_val_flipflop);
 
 endmodule
 
@@ -129,13 +129,13 @@ Assertions must be as high-level as possible, to avoid repeating implementation 
 
 In a same-cycle assertion (|->): the precondition and postcondition are evaluated in the same cycle.
 In a next-cycle assertion (|=>): the precondition is evaluated in the current cycle and the postcondition in the next cycle.
-Signals ending in _r are flip-flops: the updated value becomes available in the next cycle.
-Signals NOT ending in _r are wires: the assigned value is available in the current cycle.
-The assigned value to wires (signals NOT ending in _r) is available in the current cycle.
+Signals ending in _flipflop are flip-flops: the updated value becomes available in the next cycle.
+Signals NOT ending in _flipflop are wires: the assigned value is available in the current cycle.
+The assigned value to wires (signals NOT ending in _flipflop) is available in the current cycle.
 Use a same-cycle assertion (|->) to reason about behavior ocurring in the same cycle.
-Use a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a flip-flop (signals ending in _r).
-When reasoning about the assigned value of wires (signals NOT ending in _r), use same-cycle assertions (|->).
-When reasoning about the updated value of a flipflop (signals ending in _r), use next-cycle assertions (|=>).
+Use a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a flip-flop (signals ending in _flipflop).
+When reasoning about the assigned value of wires (signals NOT ending in _flipflop), use same-cycle assertions (|->).
+When reasoning about the updated value of a flipflop (signals ending in _flipflop), use next-cycle assertions (|=>).
 When referencing wires on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the wires on the cycle of the precondition.
 When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we DO NOT USE $past() to refer to the updated value of the flip-flop.
 When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we USE $past() to refer to the value of the flip-flop on the cycle of the precondition.
