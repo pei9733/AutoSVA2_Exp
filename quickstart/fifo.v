@@ -26,7 +26,7 @@
 // ========== Copyright Header End ============================================
 
 //==================================================================================================
-//  Filename      : fifo_buffer.v
+//  Filename      : modul_buffer.v
 //  Created On    : 2020-07-02
 //  Revision      :
 //  Author        : Marcelo Orenes Vera
@@ -34,12 +34,12 @@
 //  Email         : movera@princeton.edu
 //
 //  Description   : Buffer entries to accumulate before requesting
-//  Buffers in a FIFO fashion, without bypass 
+//  Buffers in a modul fashion, without bypass 
 //  (better timing and area, but 1 cycle delay between entrance and exit)
 //==================================================================================================
 
 
-module fifo
+module modul
   #(
     // Configuration Parameters
     parameter INFLIGHT_IDX = 2,
@@ -49,11 +49,7 @@ module fifo
     // Clock + Reset
     input  wire                          clk,
     input  wire                          rst_n,
-    /*AUTOSVA
-    fifo: in -IN> out
-    [INFLIGHT_IDX-1:0] in_transid = fifo.buffer_head_reg
-    [INFLIGHT_IDX-1:0] out_transid = fifo.buffer_tail_reg
-    */
+    
     input  wire                          in_val,
     output wire                          in_rdy,
     input  wire [SIZE-1:0]               in_data,
@@ -64,7 +60,7 @@ module fifo
 );
 
 genvar j;
-// Note that the number of FIFO slots is always a power of 2
+// Note that the number of modul slots is always a power of 2
 localparam INFLIGHT = 2**INFLIGHT_IDX;
 
 reg [INFLIGHT    -1:0] buffer_val_reg;
@@ -99,7 +95,7 @@ end
 generate
     for ( j = 0; j < INFLIGHT; j = j + 1) begin: buffers_gen
         always @(posedge clk) begin
-            // Bitmap of the FIFO slot that contain valid data.
+            // Bitmap of the modul slot that contain valid data.
             if (!rst_n) begin
               buffer_val_reg [j] <= 1'b0;
             end else begin
@@ -124,7 +120,7 @@ endmodule
 /*
 RULES:
 SVA assertions are written within a property file, but DO NOT rewrite the module interface and DO NOT add includes in the property file (as we already have them in the property file).
-DO NOT declare properties, ONLY assertions named as__<NAME>: assert property (<EXPRESSION>).
+DO NOT declare properties; DECLARE assertions named as__<NAME>: assert property (<EXPRESSION>).
 DO NOT use [] within assertion NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 Above each assertion, write a comment explaining behavior being checked.
@@ -143,7 +139,7 @@ USE a same-cycle assertion (|->) to reason about behavior ocurring in the same c
 USE a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a _reg.
 USE same-cycle assertions (|->) when reasoning about the assigned value of wires (signals NOT ending in _reg).
 USE next-cycle assertions (|=>) when reasoning about the updated value of a _reg.
-DO NOT USE $past() in preconditions, only in postconditions.
+DO NOT USE $past() in preconditions, ONLY in postconditions.
 DO NOT USE $past() on the postcondition of same-cycle assertion (|->).
 On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the value of wires.
 On the postcondition of next-cycle assertions (|=>), DO NOT USE $past() to refer to the updated value of _reg.
@@ -151,8 +147,8 @@ On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the
 Assertions without precondition DO NOT use |->
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
-Referencing internal signals in the property file ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
-NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
+Referencing internal signals in the property file ALWAYS requires prepending the name of the module before the signal name, e.g., modul.<internal_signal>.
+NEVER reference internal signals without the module name prefix, e.g., modul.<internal_signal>.
 DO NOT use foreach loops in assertions; Instead, use generate loops.
 
 TASK:

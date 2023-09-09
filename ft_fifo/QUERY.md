@@ -1,45 +1,61 @@
-```sv
-// Property File for FIFO module
+```systemverilog
+// Property File
 
-// Ensure that when 'in_val' is high and 'in_rdy' is not set, then the FIFO is full
-as__fifo_full_when_not_ready:
-assert property (fifo.in_val && !fifo.in_rdy |-> &fifo.buffer_val_reg);
+// Check that when 'in_val' is asserted and 'in_rdy' is deasserted, no buffer space is used (no buffer is added).
+as__in_no_buffer_space:
+  assert property (modul.in_val && !modul.in_rdy |-> !(|modul.add_buffer));
 
-// Ensure that when 'out_val' is high and 'out_rdy' is not set, then the FIFO is empty
-as__fifo_empty_when_not_valid:
-assert property (fifo.out_val && !fifo.out_rdy |-> !(|fifo.buffer_val_reg));
+// Check that when 'out_val' is asserted and 'out_rdy' is deasserted, no buffer space is freed (no buffer is cleared).
+as__out_no_buffer_space:
+  assert property (modul.out_val && !modul.out_rdy |-> !(|modul.clr_buffer));
 
-// When data is written to FIFO, the 'buffer_head_reg' should increment in the next cycle
-as__head_incremented_on_write:
-assert property (fifo.in_hsk |=> $past(fifo.buffer_head_reg) + 1'b1 == fifo.buffer_head_reg[INFLIGHT_IDX-1:0]);
+// Check that the head of the buffer moves to the next slot only when an in handshake (in_hsk) occurs.
+as__buffer_head_update:
+  assert property (modul.in_hsk |=> $past(modul.buffer_head_reg + {{modul.INFLIGHT_IDX-1{1'b0}}, 1'b1}) == modul.buffer_head_reg);
 
-// When data is read from FIFO, the 'buffer_tail_reg' should increment in the next cycle
-as__tail_incremented_on_read:
-assert property (fifo.out_hsk |=> $past(fifo.buffer_tail_reg) + 1'b1 == fifo.buffer_tail_reg[INFLIGHT_IDX-1:0]);
+// Check that the tail of the buffer moves to the next slot only when an out handshake (out_hsk) occurs.
+as__buffer_tail_update:
+  assert property (modul.out_hsk |=> $past(modul.buffer_tail_reg + {{modul.INFLIGHT_IDX-1{1'b0}}, 1'b1}) == modul.buffer_tail_reg);
 
-// If FIFO is not full and input handshake is true, the data at 'buffer_head_reg' index should be 'in_data' in the next cycle
+// Ensure that if the buffer is completely full (all buffer_val_reg bits are 1), then 'in_rdy' is deasserted.
+as__buffer_full_in_rdy_deassert:
+  assert property (&modul.buffer_val_reg |-> !modul.in_rdy);
+
+// Ensure that if the buffer has at least one slot free (not all buffer_val_reg bits are 1), then 'in_rdy' is asserted.
+as__buffer_not_full_in_rdy_assert:
+  assert property (!(&modul.buffer_val_reg) |-> modul.in_rdy);
+
+// Ensure that if the buffer is completely empty (all buffer_val_reg bits are 0), then 'out_val' is deasserted.
+as__buffer_empty_out_val_deassert:
+  assert property (!(|modul.buffer_val_reg) |-> !modul.out_val);
+
+// Ensure that if the buffer has at least one valid data (any of buffer_val_reg bits is 1), then 'out_val' is asserted.
+as__buffer_not_empty_out_val_assert:
+  assert property (|modul.buffer_val_reg |-> modul.out_val);
+
+// Check that when data is added to a buffer slot (add_buffer[j] is asserted), the data in that slot matches 'in_data' in the next cycle.
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_data_on_write
-        as__data_correctly_written:
-        assert property (fifo.in_hsk && !(|fifo.buffer_val_reg) && (fifo.buffer_head_reg == i) |=> fifo.buffer_data_reg[i] == $past(fifo.in_data));
-    end
+  for (genvar j = 0; j < modul.INFLIGHT; j = j + 1) begin : check_data_addition
+    as__data_addition_to_buffer:
+      assert property (modul.add_buffer[j] |=> modul.buffer_data_reg[j] == $past(modul.in_data));
+  end
 endgenerate
 
-// If FIFO is not empty and output handshake is true, the data at 'buffer_tail_reg' index should be sent out in the same cycle
+// Check that when data is read from a buffer slot (out_hsk is asserted), the read data 'out_data' matches the data in the buffer slot pointed to by buffer_tail_reg.
+as__data_read_from_buffer:
+  assert property (modul.out_hsk |-> modul.out_data == modul.buffer_data_reg[modul.buffer_tail_reg]);
+
+// Check that the number of filled buffer slots can never exceed INFLIGHT.
+as__buffer_overflow_check:
+  assert property (sum(int i = 0; i < modul.INFLIGHT; i = i + 1) modul.buffer_val_reg[i] <= modul.INFLIGHT);
+
+// Ensure that when a buffer slot is cleared, the buffer_val_reg for that slot is set to 0 in the next cycle.
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_data_on_read
-        as__data_correctly_read:
-        assert property (fifo.out_hsk && |fifo.buffer_val_reg && (fifo.buffer_tail_reg == i) |-> fifo.out_data == fifo.buffer_data_reg[i]);
-    end
+  for (genvar j = 0; j < modul.INFLIGHT; j = j + 1) begin : check_buffer_clearance
+    as__buffer_slot_clearance:
+      assert property (modul.clr_buffer[j] |=> !modul.buffer_val_reg[j]);
+  end
 endgenerate
-
-// If the buffer is full, 'in_rdy' should be low
-as__input_not_ready_when_full:
-assert property (&fifo.buffer_val_reg |-> !fifo.in_rdy);
-
-// If the buffer is empty, 'out_val' should be low
-as__output_not_valid_when_empty:
-assert property (!(|fifo.buffer_val_reg) |-> !fifo.out_val);
 
 ```
-Note: The assertions are high-level, abstracting away much of the underlying implementation details of the module. They aim to capture the primary behaviors and expectations of the FIFO operation.
+Note: These assertions cover the functional behavior of the module as provided, except for reset behavior.
