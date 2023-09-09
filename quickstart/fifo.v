@@ -134,7 +134,9 @@ Internal signals are those signals NOT present in the module interface. Internal
 Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
 NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
 EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
+Do not use foreach loops in assertions; Instead, use generate loops.
 
+TASK:
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
-Do not write explanations outside the property file, but you can write comments within the property file. 
+Do not write explanations outside the property file, but you can write comments within the property file.
 */
