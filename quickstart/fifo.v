@@ -40,8 +40,9 @@
 
 /*
 Write SVA assertions to check correctness of ALL the functionality of this module
-NOTE that signals declared within the AUTOSVA section are also usable.
-NOTE that to reference internal signals (not present in the module interface) you need to write the name of the module before the signal name, followed by a '.'
+LEARN: signals declared within the AUTOSVA section are also usable in assertions.
+LEARN: to reference internal signals (not present in the module interface) you need to write the name of the module before the signal name, e.g., fifo.buffer_head_r
+LEARN: write all assertions within the same sva property file, but do not rewrite the module interface.
 */
 
 module fifo
@@ -78,7 +79,7 @@ localparam INFLIGHT = 2**INFLIGHT_IDX;
 reg [INFLIGHT    -1:0] buffer_val_r; 
 reg [INFLIGHT_IDX-1:0] buffer_head_r;
 reg [INFLIGHT_IDX-1:0] buffer_tail_r;
-reg [SIZE-1:0] buffer_data_r [INFLIGHT-1:0];
+reg [SIZE-1:0][INFLIGHT-1:0] buffer_data_r;
 
 // Hanshake Valid and Response is favorable (1)
 wire in_hsk  = in_val && in_rdy;

@@ -94,40 +94,75 @@ assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
 
-assert property (@(posedge clk) disable iff (!rst_n) out_hsk |-> |buffer_val_r);
-assert property (@(posedge clk) disable iff (!rst_n) in_hsk  |-> !(&buffer_val_r));
+// fifo_assertions.sva
+`include "fifo.v"
 
+property reset_assertions;
+  @ (posedge clk)
+  (!rst_n) |->
+  (
+    fifo.buffer_head_r === {INFLIGHT_IDX{1'b0}} &&
+    fifo.buffer_tail_r === {INFLIGHT_IDX{1'b0}}
+  );
+endproperty
 
-assert property (@(posedge clk) disable iff (!rst_n) 
-				(buffer_head_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_head_r iff !in_hsk);
+property in_hsk_assertions;
+  @ (posedge clk)
+  (in_val && in_rdy) |->
+  ($past(fifo.buffer_head_r) + 1'b1 === fifo.buffer_head_r);
+endproperty
 
-assert property (@(posedge clk) disable iff (!rst_n) 
-				(buffer_tail_r + {{INFLIGHT_IDX-1{1'b0}}, 1'b1}) % INFLIGHT == buffer_tail_r iff !out_hsk);
+property out_hsk_assertions;
+  @ (posedge clk)
+  (out_val && out_rdy) |->
+  ($past(fifo.buffer_tail_r) + 1'b1 === fifo.buffer_tail_r);
+endproperty
 
+property buffer_val_reset_assertion;
+  @ (posedge clk)
+  (!rst_n) |-> 
+  (!$stable(fifo.buffer_val_r) && fifo.buffer_val_r === 0);
+endproperty
 
-assert property (@(posedge clk) disable iff (!rst_n)
-				out_val |-> |buffer_val_r);
+property buffer_data_reset_assertion;
+  @ (posedge clk)
+  (!rst_n) |->
+  (!$stable(fifo.buffer_data_r) && fifo.buffer_data_r === '0);
+endproperty
 
+property buffer_data_update_assertion;
+  @ (posedge clk)
+  (in_val && in_rdy) |->
+  (fifo.buffer_data_r[fifo.buffer_head_r] === in_data);
+endproperty
 
+property out_data_assertion;
+  @ (posedge clk)
+  (out_val) |->
+  (out_data === fifo.buffer_data_r[fifo.buffer_tail_r]);
+endproperty
 
-assert property (@(posedge clk) disable iff (!rst_n)
-				in_rdy |-> !(&buffer_val_r));
+property out_val_assertion;
+  @ (posedge clk)
+  out_val |->
+  (|fifo.buffer_val_r);
+endproperty
 
+property in_rdy_assertion;
+  @ (posedge clk)
+  in_rdy |->
+  (!(&fifo.buffer_val_r));
+endproperty
 
-generate
-    for (genvar j = 0; j < INFLIGHT; j = j + 1) begin: gen_assertions
-        // Data Consistency
-        assert property (@(posedge clk) disable iff (!rst_n)
-                        ($rose(add_buffer[j]) |-> (buffer_data_r[j] == in_data)));
-        assert property (@(posedge clk) disable iff (!rst_n)
-                        (out_hsk && buffer_tail_r == j |-> (out_data == buffer_data_r[j])));
+assert property (reset_assertions);
+assert property (in_hsk_assertions);
+assert property (out_hsk_assertions);
+assert property (buffer_val_reset_assertion);
+assert property (buffer_data_reset_assertion);
+assert property (buffer_data_update_assertion);
+assert property (out_data_assertion);
+assert property (out_val_assertion);
+assert property (in_rdy_assertion);
 
-        // Buffer Clear and Add
-        assert property (@(posedge clk) disable iff (!rst_n) 
-                        add_buffer[j] |-> buffer_val_r[j]);
-        assert property (@(posedge clk) disable iff (!rst_n)
-                        clr_buffer[j] |-> !buffer_val_r[j]);
-    end
-endgenerate
 
 endmodule
