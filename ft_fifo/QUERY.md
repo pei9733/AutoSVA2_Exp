@@ -1,57 +1,63 @@
-```systemverilog
-property_file.sv:
+```sv
+// Property File for the fifo module
 
-module fifo_properties (input clk, input rst_n, input in_val, output in_rdy, input [SIZE-1:0] in_data, output out_val, input out_rdy, output [SIZE-1:0] out_data);
-
-  // Assertion 1: When input handshake occurs, the input data is loaded into the FIFO in the next cycle.
-  as__input_handshake_data_load : assert property (
-    in_val && in_rdy |=> fifo.buffer_data_r[fifo.buffer_head_r] == in_data
+// Check that if there's an in handshake (in_hsk), the buffer corresponding to the head of the FIFO should be updated with data on the next cycle.
+as__in_hsk_buffer_data_update:
+  assert property (
+    fifo.in_hsk |=> fifo.buffer_data_r[fifo.buffer_head_r] == $past(fifo.in_data)
   );
 
-  // Assertion 2: When output handshake occurs, the output data matches the FIFO tail data in the same cycle.
-  as__output_handshake_data_match : assert property (
-    out_val && out_rdy |-> out_data == fifo.buffer_data_r[fifo.buffer_tail_r]
+// Check that if there's an in handshake (in_hsk), the buffer corresponding to the head of the FIFO should be marked as valid on the next cycle.
+as__in_hsk_buffer_val_set:
+  assert property (
+    fifo.in_hsk |=> fifo.buffer_val_r[fifo.buffer_head_r] == 1'b1
   );
 
-  // Assertion 3: If FIFO is full, input ready should be low.
-  as__fifo_full_input_not_ready : assert property (
-    (&fifo.buffer_val_r) |-> !in_rdy
+// Check that if there's an out handshake (out_hsk), the buffer corresponding to the tail of the FIFO should be cleared (made invalid) on the next cycle.
+as__out_hsk_buffer_val_clr:
+  assert property (
+    fifo.out_hsk |=> fifo.buffer_val_r[fifo.buffer_tail_r] == 1'b0
   );
 
-  // Assertion 4: If FIFO is empty, output valid should be low.
-  as__fifo_empty_output_not_valid : assert property (
-    (!|fifo.buffer_val_r) |-> !out_val
+// Check that the buffer tail data should match the out_data wire.
+as__buffer_tail_data_match:
+  assert property (
+    fifo.buffer_data_r[fifo.buffer_tail_r] |-> fifo.out_data == fifo.buffer_data_r[fifo.buffer_tail_r]
   );
 
-  // Assertion 5: If there's an input handshake, buffer_head_r increments in the next cycle.
-  as__input_handshake_head_increment : assert property (
-    in_val && in_rdy |=> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1'b1
+// Check that out_val should be high if any of the buffer slot is valid.
+as__out_val_high_if_any_buffer_valid:
+  assert property (
+    (|fifo.buffer_val_r) |-> fifo.out_val == 1'b1
   );
 
-  // Assertion 6: If there's an output handshake, buffer_tail_r increments in the next cycle.
-  as__output_handshake_tail_increment : assert property (
-    out_val && out_rdy |=> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1'b1
+// Check that out_val should be low if all buffer slots are invalid.
+as__out_val_low_if_all_buffer_invalid:
+  assert property (
+    (!&fifo.buffer_val_r) |-> fifo.out_val == 0'b0
   );
 
-  // Assertion 7: Check if the add_buffer and clr_buffer are behaving as expected.
-  generate
-    genvar k;
-    for (k = 0; k < INFLIGHT; k = k + 1) begin: buffer_operations_gen
-      
-      // If input handshake occurs, the respective buffer slot should be flagged to be added in the next cycle.
-      as__input_handshake_add_buffer_flagged : assert property (
-        in_val && in_rdy && (fifo.buffer_head_r == k) |=> fifo.add_buffer[k]
+// Check that in_rdy is asserted if there's at least one slot in the FIFO that's not valid.
+as__in_rdy_asserted_if_buffer_slot_available:
+  assert property (
+    (!&fifo.buffer_val_r) |-> fifo.in_rdy == 1'b1
+  );
+
+// Check that in_rdy is de-asserted if all slots in the FIFO are valid (full).
+as__in_rdy_deasserted_if_buffer_full:
+  assert property (
+    (&fifo.buffer_val_r) |-> fifo.in_rdy == 0'b0
+  );
+
+// Checking that if a particular slot is being added and cleared in the same cycle, it should remain valid.
+generate
+  for (genvar i = 0; i < 2**fifo.INFLIGHT_IDX; i = i + 1) begin: buffer_validity_check
+    as__buffer_slot_validity_check:
+      assert property (
+        (fifo.add_buffer[i] && fifo.clr_buffer[i]) |-> fifo.buffer_val_r[i] == 1'b1
       );
-
-      // If output handshake occurs, the respective buffer slot should be flagged to be cleared in the next cycle.
-      as__output_handshake_clear_buffer_flagged : assert property (
-        out_val && out_rdy && (fifo.buffer_tail_r == k) |=> fifo.clr_buffer[k]
-      );
-      
-    end
-  endgenerate
-
-endmodule
+  end
+endgenerate
 ```
 
-The above SystemVerilog Assertion (SVA) checks provide a comprehensive verification of the FIFO's functionality, excluding reset behavior as instructed. It covers the input and output handshakes, buffer read and write operations, and FIFO full and empty conditions.
+This property file contains SVA assertions to check the correct functionality of the provided FIFO module. The assertions cover the behavior of the FIFO during input and output handshakes, the validity of the buffer slots, and the readiness of the FIFO to accept new data.
