@@ -114,12 +114,20 @@ assert property (@(posedge clk) disable iff (!rst_n)
 				in_rdy |-> !(&buffer_val_r));
 
 
+generate
+    for (genvar j = 0; j < INFLIGHT; j = j + 1) begin: gen_assertions
+        // Data Consistency
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        ($rose(add_buffer[j]) |-> (buffer_data_r[j] == in_data)));
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        (out_hsk && buffer_tail_r == j |-> (out_data == buffer_data_r[j])));
 
-foreach (buffer_val_r[j]) begin
-	assert property (@(posedge clk) disable iff (!rst_n) 
-					add_buffer[j] |-> buffer_val_r[j]);
-	assert property (@(posedge clk) disable iff (!rst_n)
-					clr_buffer[j] |-> !buffer_val_r[j]);
-end
+        // Buffer Clear and Add
+        assert property (@(posedge clk) disable iff (!rst_n) 
+                        add_buffer[j] |-> buffer_val_r[j]);
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        clr_buffer[j] |-> !buffer_val_r[j]);
+    end
+endgenerate
 
 endmodule

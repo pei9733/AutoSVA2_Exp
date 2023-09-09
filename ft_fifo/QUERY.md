@@ -54,3 +54,23 @@ Based on these functionalities, here are the SVA assertions:
     ```
 
 These assertions should help in validating the main functionalities of the FIFO module. However, one might need to adjust or add more assertions based on additional requirements or edge cases in the design.
+
+
+syntax error near 'foreach'
+[ERROR (VERI-2344)] /tigress/movera/exp/AutoSVA/ft_fifo/sva/fifo_prop.sv(108): SystemVerilog keyword foreach used in incorrect context
+
+generate
+    for (genvar j = 0; j < INFLIGHT; j = j + 1) begin: gen_assertions
+        // Data Consistency
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        ($rose(add_buffer[j]) |-> (buffer_data_r[j] == in_data)));
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        (out_hsk && buffer_tail_r == j |-> (out_data == buffer_data_r[j])));
+
+        // Buffer Clear and Add
+        assert property (@(posedge clk) disable iff (!rst_n) 
+                        add_buffer[j] |-> buffer_val_r[j]);
+        assert property (@(posedge clk) disable iff (!rst_n)
+                        clr_buffer[j] |-> !buffer_val_r[j]);
+    end
+endgenerate
