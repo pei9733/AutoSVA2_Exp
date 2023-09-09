@@ -90,88 +90,62 @@ end
 as__fifo_transid_data_unique: assert property (|fifo_transid_sampled |-> !fifo_transid_set);
 as__fifo_transid_data_integrity: assert property (|fifo_transid_sampled && fifo_transid_response |-> (out_data == fifo_transid_data_model));
 
-assign out_transid = fifo.buffer_tail_flipflop;
-assign in_transid = fifo.buffer_head_flipflop;
+assign out_transid = fifo.buffer_tail_reg;
+assign in_transid = fifo.buffer_head_reg;
 
 //====DESIGNER-ADDED-SVA====//
 
 
 
+// Property file for module fifo
 
-// fifo_properties.sva
-// SVA assertions for the FIFO module
-
-// Check if handshake happens, the head of the buffer will increment
-as__head_increment:
-assert property (
-    fifo.in_hsk |=> fifo.buffer_head_flipflop == $past(fifo.buffer_head_flipflop) + INFLIGHT_IDX'1
+// 1. Handshake for in_val and in_rdy
+as__in_val_in_rdy_handshake: assert property (
+    fifo.in_val && !(&fifo.buffer_val_reg) |-> fifo.in_rdy
 );
 
-// Check if handshake happens on the output, the tail of the buffer will increment
-as__tail_increment:
-assert property (
-    fifo.out_hsk |=> fifo.buffer_tail_flipflop == $past(fifo.buffer_tail_flipflop) + INFLIGHT_IDX'1
+// 2. Handshake for out_val and out_rdy
+as__out_val_out_rdy_handshake: assert property (
+    fifo.out_val && fifo.out_rdy |-> $past(fifo.buffer_val_reg[fifo.buffer_tail_reg])
 );
 
-// Check data consistency: If data is added to the buffer, it should match the input data on the same cycle
+// 3. Adding an entry to FIFO sets buffer_val_reg
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
-        as__data_consistency_0:
-        assert property (
-            fifo.add_buffer[i] |-> fifo.buffer_data_flipflop[i] == fifo.in_data
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: add_to_fifo_gen
+        as__add_to_fifo: assert property (
+            fifo.add_buffer[i] |=> fifo.buffer_val_reg[i]
         );
     end
 endgenerate
 
-// If all buffer slots are filled (all are ones), input is not ready
-as__in_rdy_assert:
-assert property (
-    (&fifo.buffer_val_flipflop) |-> !fifo.in_rdy
-);
-
-// If none of the buffer slots are filled (all are zeroes), output is not valid
-as__out_val_assert:
-assert property (
-    !(|fifo.buffer_val_flipflop) |-> !fifo.out_val
-);
-
-// If there's any buffer slot filled (some are ones), output is valid
-as__out_val_positive_assert:
-assert property (
-    (|fifo.buffer_val_flipflop) |-> fifo.out_val
-);
-
-// If an output handshake happens, then there must be a valid data to be sent out from the buffer 
-as__out_hsk_valid_data:
-assert property (
-    fifo.out_hsk |-> |fifo.buffer_val_flipflop
-);
-
-// Check that the data sent out matches the data from the buffer's tail
-as__out_data_match:
-assert property (
-    fifo.out_hsk |-> fifo.out_data == fifo.buffer_data_flipflop[fifo.buffer_tail_flipflop]
-);
-
-// Check if a slot is cleared on an output handshake, it should no longer contain valid data in the next cycle
+// 4. Reading an entry from FIFO clears buffer_val_reg
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
-        as__slot_clear_0:
-        assert property (
-            fifo.clr_buffer[i] |=> !fifo.buffer_val_flipflop[i]
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: read_from_fifo_gen
+        as__read_from_fifo: assert property (
+            fifo.clr_buffer[i] |=> !fifo.buffer_val_reg[i]
         );
     end
 endgenerate
 
-// Check that when data is added to a slot in the buffer, it should contain valid data in the next cycle
+// 5. When adding an entry to FIFO, data is stored in buffer_data_reg
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin
-        as__slot_data_add_0:
-        assert property (
-            fifo.add_buffer[i] |=> fifo.buffer_val_flipflop[i]
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: data_in_fifo_gen
+        as__data_in_fifo: assert property (
+            fifo.add_buffer[i] |=> fifo.buffer_data_reg[i] == $past(fifo.in_data)
         );
     end
 endgenerate
+
+// 6. Output data matches data at FIFO tail
+as__out_data_match: assert property (
+    fifo.out_val |-> fifo.out_data == fifo.buffer_data_reg[fifo.buffer_tail_reg]
+);
+
+// 7. FIFO reports full
+as__fifo_full: assert property (
+    &fifo.buffer_val_reg |-> !fifo.in_rdy
+);
+
 
 
 
