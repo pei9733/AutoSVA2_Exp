@@ -127,6 +127,7 @@ SVA assertions are written within a property file, but DO NOT rewrite the module
 DO NOT declare properties, ONLY assertions named as__<NAME>: assert property (<EXPRESSION>).
 DO NOT use [] within assertion NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
+Above each assertion, write a comment explaining behavior being checked.
 
 &bitarray means that ALL the bits  are ONES.
 !(&bitarray) means it's NOT TRUE that ALL the bits are ONES, i.e., SOME of the bits are ZEROS.
@@ -139,22 +140,22 @@ Signals ending in _reg are registers: the assigned value changes in the next cyc
 Signals NOT ending in _reg are wires: the assigned value changes in the same cycle.
 The assigned value to wires (signals NOT ending in _reg) can be referenced in the current cycle.
 USE a same-cycle assertion (|->) to reason about behavior ocurring in the same cycle.
-USE a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a register (signals ending in _reg).
+USE a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a _reg.
 USE same-cycle assertions (|->) when reasoning about the assigned value of wires (signals NOT ending in _reg).
-USE next-cycle assertions (|=>) when reasoning about the updated value of a reg (signals ending in _reg).
+USE next-cycle assertions (|=>) when reasoning about the updated value of a _reg.
 When referencing wires on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the wires on the cycle of the precondition.
-When referencing registers on the postcondition of a next-cycle assertion (|=>), DO NOT USE $past() to refer to the updated value of the register.
-When referencing registers on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the register on the cycle of the precondition.
-When referencing registers on the postcondition of a same-cycle assertion (|->), DO NOT USE $past() to refer to the current value of the register (before the update).
+When referencing _reg on the postcondition of a next-cycle assertion (|=>), DO NOT USE $past() to refer to the updated value of the _reg.
+When referencing _reg on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the _reg on the cycle of the precondition.
+When referencing _reg on the postcondition of a same-cycle assertion (|->), DO NOT USE $past() to refer to the current value of the _reg (before the update).
 Assertions without precondition DO NOT use |->
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
 Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
 NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
 EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
-Do not use foreach loops in assertions; Instead, use generate loops.
+DO NOT use foreach loops in assertions; Instead, use generate loops.
 
 TASK:
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
-Do not write explanations outside the property file, but you can write comments within the property file.
+DO NOT answer anything except for the property file, ONLY write comments within the property file.
 */
