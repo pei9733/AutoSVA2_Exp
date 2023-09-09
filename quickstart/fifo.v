@@ -123,14 +123,16 @@ assign in_rdy  = !(&buffer_val_r);
 endmodule
 
 /*
-LEARN: SVA assertions are written within a property file. DO NOT rewrite the module interface and do not add includes in the property file as we already have them in the property file.
+LEARN: SVA assertions are written within a property file. DO NOT rewrite the module interface and DO NOT add includes in the property file as we already have them in the property file.
 LEARN: Properties are named as pr__<NAME> and assertions as "as__<NAME> : assert".
 LEARN: Assertions must be as high-level as possible, to avoid repeating implementation details.
 LEARN: |-> is a same-cycle assertion (the antecedent and consequent are evaluated in the same cycle)
 LEARN: |=> is a next-cycle assertion (the antecedent is evaluated in the current cycle and the consequent in the next cycle)
 LEARN: Signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle
-LEARN: Signals not ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
-LEARN: Internal signals are those signals not present in the module interface. Internal signals are declared within the module.
+LEARN: Signals NOT ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
+LEARN: When referencing combinational logic (signals NOT ending in _r) on the consequent of a next-cycle assertion, USE $past() to refer to the value of the signal in the previous cycle
+LEARN: When referencing flip-flops (signals ending in _r) on the consequent of a next-cycle assertion, we do NOT use $past() to refer to the updated value of the signal.
+LEARN: Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
 LEARN: Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.buffer_head_r
 LEARN: NEVER reference internal signals without the module name prefix, e.g., fifo.buffer_head_r.
 LEARN: EVERY time you reference a signal in an assertion, you MUST specify the module name prefix.
