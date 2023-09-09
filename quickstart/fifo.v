@@ -127,21 +127,27 @@ SVA assertions are written within a property file, but DO NOT rewrite the module
 DO NOT declare properties, ONLY assertions named as__<NAME> : assert property (<expression>). Do not add @(posedge clk) to the expression.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 
-In a same-cycle assertion (|->): the antecedent and consequent are evaluated in the same cycle.
-In a next-cycle assertion (|=>): the antecedent is evaluated in the current cycle and the consequent in the next cycle.
-Signal names ending in _r represent flip-flops: the updated value becomes available in the next cycle.
-Signal names NOT ending in _r represent wires: the assigned value is available in the current cycle.
-The assigned value to wires (NOT ending in _r) is available in the current cycle.
-When referencing wires on the consequent of a next-cycle assertion (|=>), USE $past() to refer to the value of the wires on the cycle of the antecedent.
-When reasoning about the assigned value of wires, use same-cycle assertions (|->).
-When referencing flip-flops on the consequent of a next-cycle assertion (|=>), we DO NOT USE $past() to refer to the updated value of the flip-flop.
-When referencing flip-flops on the consequent of a same-cycle assertion (|->), we DO NOT USE $past() to refer to the current value of the flip-flop (before the update).
+In a same-cycle assertion (|->): the precondition and postcondition are evaluated in the same cycle.
+In a next-cycle assertion (|=>): the precondition is evaluated in the current cycle and the postcondition in the next cycle.
+Signals ending in _r are flip-flops: the updated value becomes available in the next cycle.
+Signals NOT ending in _r are wires: the assigned value is available in the current cycle.
+The assigned value to wires (signals NOT ending in _r) is available in the current cycle.
+Use a same-cycle assertion (|->) to reason about behavior ocurring in the same cycle.
+Use a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a flip-flop (signals ending in _r).
+When reasoning about the assigned value of wires (signals NOT ending in _r), use same-cycle assertions (|->).
+When reasoning about the updated value of a flipflop (signals ending in _r), use next-cycle assertions (|=>).
+When referencing wires on the postcondition of a next-cycle assertion (|=>), USE $past() to refer to the value of the wires on the cycle of the precondition.
+When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we DO NOT USE $past() to refer to the updated value of the flip-flop.
+When referencing flip-flops on the postcondition of a next-cycle assertion (|=>), we USE $past() to refer to the value of the flip-flop on the cycle of the precondition.
+When referencing flip-flops on the postcondition of a same-cycle assertion (|->), we DO NOT USE $past() to refer to the current value of the flip-flop (before the update).
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
 Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
 NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
 EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
 Do not use foreach loops in assertions; Instead, use generate loops.
+!&bitarray means that not all bits in bitarray are 1. !(|bitarray) means that not any bit in bitarray is 1.
+When using constants, ALWAYS define the width: <WIDTH>'d<VALUE> for decimal constants.
 
 TASK:
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
