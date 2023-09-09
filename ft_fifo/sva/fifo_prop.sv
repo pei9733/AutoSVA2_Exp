@@ -22,6 +22,7 @@ module fifo_prop
 //==============================================================================
 // Local Parameters
 //==============================================================================
+localparam INFLIGHT = 2**INFLIGHT_IDX;
 
 genvar j;
 default clocking cb @(posedge clk);
@@ -93,47 +94,50 @@ assign out_transid = fifo.buffer_tail_r;
 assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
+module fifo_properties (input clk);
 
-// Check that if `in_hsk` is true, buffer head index will be incremented in the next cycle
-property pr__in_hsk_behavior;
-  @(posedge clk)
-  (fifo.in_hsk && !rst_n) |-> (fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1);
-endproperty
-as__in_hsk_behavior : assert property (pr__in_hsk_behavior);
+// Import the required fifo signals from the fifo module
+import fifo::*;
 
-// Check that if `out_hsk` is true, buffer tail index will be incremented in the next cycle
-property pr__out_hsk_behavior;
-  @(posedge clk)
-  (fifo.out_hsk && !rst_n) |-> (fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1);
-endproperty
-as__out_hsk_behavior : assert property (pr__out_hsk_behavior);
+//==============================================================================
+// SVA Properties for the FIFO
+//==============================================================================
 
-// Check that data will be stored into buffer_data_r when `in_hsk` is true
-property pr__data_store_behavior;
+// Check that when the FIFO is full, in_rdy is 0
+property pr__fifo_full;
   @(posedge clk)
-  (fifo.in_hsk && !rst_n) |-> $rose(add_buffer[fifo.buffer_head_r]) && (fifo.buffer_data_r[fifo.buffer_head_r] == in_data);
+  &buffer_val_r |-> !in_rdy;
 endproperty
-as__data_store_behavior : assert property (pr__data_store_behavior);
+as__fifo_full: assert property(pr__fifo_full);
 
-// Check that if buffer is full, in_rdy will be deasserted (not ready to accept data)
-property pr__buffer_full_behavior;
+// Check that when the FIFO is empty, out_val is 0
+property pr__fifo_empty;
   @(posedge clk)
-  (&buffer_val_r && !rst_n) |-> (!in_rdy);
+  !|buffer_val_r |-> !out_val;
 endproperty
-as__buffer_full_behavior : assert property (pr__buffer_full_behavior);
+as__fifo_empty: assert property(pr__fifo_empty);
 
-// Check that if buffer is empty, out_val will be deasserted (no data available)
-property pr__buffer_empty_behavior;
+// Check that written data reaches the FIFO read
+property pr__data_path;
   @(posedge clk)
-  (!|buffer_val_r && !rst_n) |-> (!out_val);
+  in_hsk |=> out_hsk within (INFLIGHT);
 endproperty
-as__buffer_empty_behavior : assert property (pr__buffer_empty_behavior);
+as__data_path: assert property(pr__data_path);
 
-// Check that the output data is equal to the data at the buffer_tail_r index
-property pr__out_data_behavior;
+// Check that buffer_head_r wraps around correctly
+property pr__buffer_head_wrap;
   @(posedge clk)
-  (fifo.out_val && !rst_n) |-> (out_data == fifo.buffer_data_r[fifo.buffer_tail_r]);
+  (fifo.buffer_head_r == (INFLIGHT - 1)) && in_hsk |-> fifo.buffer_head_r == 0;
 endproperty
-as__out_data_behavior : assert property (pr__out_data_behavior);
+as__buffer_head_wrap: assert property(pr__buffer_head_wrap);
+
+// Check that buffer_tail_r wraps around correctly
+property pr__buffer_tail_wrap;
+  @(posedge clk)
+  (fifo.buffer_tail_r == (INFLIGHT - 1)) && out_hsk |-> fifo.buffer_tail_r == 0;
+endproperty
+as__buffer_tail_wrap: assert property(pr__buffer_tail_wrap);
+
+
 
 endmodule

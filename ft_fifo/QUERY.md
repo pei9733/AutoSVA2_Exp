@@ -1,70 +1,59 @@
-Here are some SystemVerilog Assertion (SVA) properties to verify the behavior of the provided `fifo` module. These properties check the correctness of most of the behavior, excluding reset behavior as requested.
+Given the FIFO module description, the following SystemVerilog Assertions (SVA) checks are defined to verify its behavior:
+
+- **Full and Empty Conditions**: We want to ensure that when the FIFO is full, no new data can be written (`in_rdy` is 0) and when it's empty, no data can be read (`out_val` is 0).
+  
+- **Data Path**: Once the data is written into the FIFO (`in_hsk` is true), it should be available for read after it reaches the front (`out_hsk` is true).
+
+- **Buffer Indexing**: We want to ensure that the `buffer_head_r` and `buffer_tail_r` pointers wrap around correctly once they hit the FIFO size (`INFLIGHT`).
+
+Below are the SVA assertions in a property file format for the FIFO:
 
 ```systemverilog
-module fifo_assertions
-  #(
-    parameter INFLIGHT_IDX = 2,
-    parameter SIZE = 4
-  )
-(
-    input  wire                          clk,
-    input  wire                          rst_n,
-    input  wire                          in_val,
-    output wire                          in_rdy,
-    input  wire [SIZE-1:0]               in_data,
+module fifo_properties (input clk);
 
-    output wire                          out_val,
-    input  wire                          out_rdy,
-    output wire [SIZE-1:0]               out_data
-);
+// Import the required fifo signals from the fifo module
+import fifo::*;
 
 //==============================================================================
-// SVA Properties
+// SVA Properties for the FIFO
 //==============================================================================
 
-// Check that if `in_hsk` is true, buffer head index will be incremented in the next cycle
-property pr__in_hsk_behavior;
+// Check that when the FIFO is full, in_rdy is 0
+property pr__fifo_full;
   @(posedge clk)
-  (fifo.in_hsk && !rst_n) |-> (fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1);
+  &buffer_val_r |-> !in_rdy;
 endproperty
-as__in_hsk_behavior : assert property (pr__in_hsk_behavior);
+as__fifo_full: assert property(pr__fifo_full);
 
-// Check that if `out_hsk` is true, buffer tail index will be incremented in the next cycle
-property pr__out_hsk_behavior;
+// Check that when the FIFO is empty, out_val is 0
+property pr__fifo_empty;
   @(posedge clk)
-  (fifo.out_hsk && !rst_n) |-> (fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1);
+  !|buffer_val_r |-> !out_val;
 endproperty
-as__out_hsk_behavior : assert property (pr__out_hsk_behavior);
+as__fifo_empty: assert property(pr__fifo_empty);
 
-// Check that data will be stored into buffer_data_r when `in_hsk` is true
-property pr__data_store_behavior;
+// Check that written data reaches the FIFO read
+property pr__data_path;
   @(posedge clk)
-  (fifo.in_hsk && !rst_n) |-> $rose(add_buffer[fifo.buffer_head_r]) && (fifo.buffer_data_r[fifo.buffer_head_r] == in_data);
+  in_hsk |=> out_hsk within (INFLIGHT);
 endproperty
-as__data_store_behavior : assert property (pr__data_store_behavior);
+as__data_path: assert property(pr__data_path);
 
-// Check that if buffer is full, in_rdy will be deasserted (not ready to accept data)
-property pr__buffer_full_behavior;
+// Check that buffer_head_r wraps around correctly
+property pr__buffer_head_wrap;
   @(posedge clk)
-  (&buffer_val_r && !rst_n) |-> (!in_rdy);
+  (fifo.buffer_head_r == (INFLIGHT - 1)) && in_hsk |-> fifo.buffer_head_r == 0;
 endproperty
-as__buffer_full_behavior : assert property (pr__buffer_full_behavior);
+as__buffer_head_wrap: assert property(pr__buffer_head_wrap);
 
-// Check that if buffer is empty, out_val will be deasserted (no data available)
-property pr__buffer_empty_behavior;
+// Check that buffer_tail_r wraps around correctly
+property pr__buffer_tail_wrap;
   @(posedge clk)
-  (!|buffer_val_r && !rst_n) |-> (!out_val);
+  (fifo.buffer_tail_r == (INFLIGHT - 1)) && out_hsk |-> fifo.buffer_tail_r == 0;
 endproperty
-as__buffer_empty_behavior : assert property (pr__buffer_empty_behavior);
-
-// Check that the output data is equal to the data at the buffer_tail_r index
-property pr__out_data_behavior;
-  @(posedge clk)
-  (fifo.out_val && !rst_n) |-> (out_data == fifo.buffer_data_r[fifo.buffer_tail_r]);
-endproperty
-as__out_data_behavior : assert property (pr__out_data_behavior);
+as__buffer_tail_wrap: assert property(pr__buffer_tail_wrap);
 
 endmodule
 ```
 
-The above SVA properties check the key behaviors of the `fifo` module, such as handling of buffer indices (`buffer_head_r` and `buffer_tail_r`), storage of data into the `buffer_data_r` array, and behavior of the `in_rdy` and `out_val` signals when the buffer is full or empty respectively.
+Note: These assertions capture key functionalities of the FIFO. Depending on the specific behavior and requirements of the design, additional properties may need to be defined.

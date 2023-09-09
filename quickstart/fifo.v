@@ -39,16 +39,22 @@
 //==================================================================================================
 
 /*
-Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
-Give appropiate names to properties pr__<NAME> and assertions "as__<NAME> : assert" and make them as high-level as possible, avoid repeating implementation details.
-LEARN: signals declared within the AUTOSVA section are also usable in assertions.
-LEARN: to reference internal signals (not present in the module interface) you need to write the name of the module before the signal name, e.g., fifo.buffer_head_r
-LEARN: write all assertions within the same sva property file, but do not rewrite the module interface and do not add includes.
+LEARN: SVA assertions are written within a property file. DO NOT rewrite the module interface and do not add includes in the property file as we already have them in the property file.
+LEARN: Properties are named as pr__<NAME> and assertions as "as__<NAME> : assert".
+LEARN: Assertions must be as high-level as possible, to avoid repeating implementation details.
 LEARN: |-> is a same-cycle assertion (the antecedent and consequent are evaluated in the same cycle)
 LEARN: |=> is a next-cycle assertion (the antecedent is evaluated in the current cycle and the consequent in the next cycle)
-LEARN: signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle
-LEARN: signals not ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
+LEARN: Signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle
+LEARN: Signals not ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
+LEARN: Internal signals are those signals not present in the module interface. Internal signals are declared within the module.
+LEARN: Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.buffer_head_r
+LEARN: NEVER reference internal signals without the module name prefix, e.g., fifo.buffer_head_r.
+LEARN: EVERY time you reference a signal in an assertion, you MUST specify the module name prefix.
+
+Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.
+Do not write explanations outside the property file, but you can write comments within the property file. 
 */
+
 
 module fifo
   #(
