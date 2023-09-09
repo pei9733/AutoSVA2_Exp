@@ -1,86 +1,50 @@
-Here's the SVA assertion file to validate the given `fifo` module:
+To verify the correct functionality of the FIFO module, several assertions are needed. 
+
+1. Check that if `in_val` is high and `in_rdy` is high, then the head of the buffer increments.
+2. Check that if `out_val` is high and `out_rdy` is high, then the tail of the buffer increments.
+3. Check that the data being pushed into the buffer (when `in_hsk` is true) matches the data at the head of the buffer.
+4. Check that the data being popped from the buffer (when `out_hsk` is true) matches the data at the tail of the buffer.
+5. Check that if the buffer is full (`in_rdy` is low), the head and tail positions are at their maximum distance apart (distance is equal to `INFLIGHT`).
+6. Check that if the buffer is empty (`out_val` is low), the head and tail positions are the same.
+
+Now, let's write the SVA assertions for the above:
 
 ```systemverilog
-// fifo_assertions.sva
-`include "fifo.sv"
-
-property reset_assertions;
-  @ (posedge clk)
-  (!rst_n) |->
-  (
-    fifo.buffer_head_r === {INFLIGHT_IDX{1'b0}} &&
-    fifo.buffer_tail_r === {INFLIGHT_IDX{1'b0}}
-  );
+property as__PushCorrectness;
+  @(posedge clk) in_val && in_rdy |-> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1;
 endproperty
 
-property in_hsk_assertions;
-  @ (posedge clk)
-  (in_val && in_rdy) |->
-  ($past(fifo.buffer_head_r) + 1'b1 === fifo.buffer_head_r);
+as__PushCorrectness : assert property (as__PushCorrectness);
+
+property as__PopCorrectness;
+  @(posedge clk) out_val && out_rdy |-> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1;
 endproperty
 
-property out_hsk_assertions;
-  @ (posedge clk)
-  (out_val && out_rdy) |->
-  ($past(fifo.buffer_tail_r) + 1'b1 === fifo.buffer_tail_r);
+as__PopCorrectness : assert property (as__PopCorrectness);
+
+property as__PushDataCorrectness;
+  @(posedge clk) in_hsk |-> buffer_data_r[fifo.buffer_head_r] == in_data;
 endproperty
 
-property buffer_val_reset_assertion;
-  @ (posedge clk)
-  (!rst_n) |-> 
-  (!$stable(fifo.buffer_val_r) && fifo.buffer_val_r === 0);
+as__PushDataCorrectness : assert property (as__PushDataCorrectness);
+
+property as__PopDataCorrectness;
+  @(posedge clk) out_hsk |-> out_data == $past(buffer_data_r[fifo.buffer_tail_r]);
 endproperty
 
-property buffer_data_reset_assertion;
-  @ (posedge clk)
-  (!rst_n) |->
-  (!$stable(fifo.buffer_data_r) && fifo.buffer_data_r === '0);
+as__PopDataCorrectness : assert property (as__PopDataCorrectness);
+
+property as__BufferFullness;
+  @(posedge clk) !in_rdy |-> (fifo.buffer_head_r - fifo.buffer_tail_r) == INFLIGHT - 1;
 endproperty
 
-property buffer_data_update_assertion;
-  @ (posedge clk)
-  (in_val && in_rdy) |->
-  (fifo.buffer_data_r[fifo.buffer_head_r] === in_data);
+as__BufferFullness : assert property (as__BufferFullness);
+
+property as__BufferEmptyness;
+  @(posedge clk) !out_val |-> fifo.buffer_head_r == fifo.buffer_tail_r;
 endproperty
 
-property out_data_assertion;
-  @ (posedge clk)
-  (out_val) |->
-  (out_data === fifo.buffer_data_r[fifo.buffer_tail_r]);
-endproperty
-
-property out_val_assertion;
-  @ (posedge clk)
-  out_val |->
-  (|fifo.buffer_val_r);
-endproperty
-
-property in_rdy_assertion;
-  @ (posedge clk)
-  in_rdy |->
-  (!(&fifo.buffer_val_r));
-endproperty
-
-assert property (reset_assertions);
-assert property (in_hsk_assertions);
-assert property (out_hsk_assertions);
-assert property (buffer_val_reset_assertion);
-assert property (buffer_data_reset_assertion);
-assert property (buffer_data_update_assertion);
-assert property (out_data_assertion);
-assert property (out_val_assertion);
-assert property (in_rdy_assertion);
+as__BufferEmptyness : assert property (as__BufferEmptyness);
 ```
 
-Explanation:
-1. `reset_assertions`: Check if both head and tail pointers of the FIFO are reset to 0 when `rst_n` is de-asserted.
-2. `in_hsk_assertions`: Checks if the buffer head pointer increments by one when there's a valid handshake on the input.
-3. `out_hsk_assertions`: Checks if the buffer tail pointer increments by one when there's a valid handshake on the output.
-4. `buffer_val_reset_assertion`: Checks if the buffer valid registers are reset to 0 when `rst_n` is de-asserted.
-5. `buffer_data_reset_assertion`: Checks if the buffer data registers are reset to 0 when `rst_n` is de-asserted.
-6. `buffer_data_update_assertion`: Checks if the buffer data is correctly updated with the input data on a valid handshake.
-7. `out_data_assertion`: Ensures the data at the tail pointer is correctly assigned to `out_data` when output is valid.
-8. `out_val_assertion`: Checks if `out_val` is asserted if any buffer register is valid.
-9. `in_rdy_assertion`: Checks if `in_rdy` is asserted only if not all buffer registers are valid.
-
-This should cover most of the functionality of the module, but more detailed assertions can be added if specific corner cases need to be checked.
+Note that the above assertions assume that the buffer pointers will wrap around when they reach the maximum value (i.e., they will overflow from `INFLIGHT-1` to `0`). If this isn't the case, the assertions will need modifications.

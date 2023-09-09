@@ -94,75 +94,42 @@ assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
 
-// fifo_assertions.sva
-`include "fifo.v"
 
-property reset_assertions;
-  @ (posedge clk)
-  (!rst_n) |->
-  (
-    fifo.buffer_head_r === {INFLIGHT_IDX{1'b0}} &&
-    fifo.buffer_tail_r === {INFLIGHT_IDX{1'b0}}
-  );
+property as__PushCorrectness;
+  @(posedge clk) in_val && in_rdy |-> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1;
 endproperty
 
-property in_hsk_assertions;
-  @ (posedge clk)
-  (in_val && in_rdy) |->
-  ($past(fifo.buffer_head_r) + 1'b1 === fifo.buffer_head_r);
+as__PushCorrectness : assert property (as__PushCorrectness);
+
+property as__PopCorrectness;
+  @(posedge clk) out_val && out_rdy |-> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1;
 endproperty
 
-property out_hsk_assertions;
-  @ (posedge clk)
-  (out_val && out_rdy) |->
-  ($past(fifo.buffer_tail_r) + 1'b1 === fifo.buffer_tail_r);
+as__PopCorrectness : assert property (as__PopCorrectness);
+
+property as__PushDataCorrectness;
+  @(posedge clk) in_hsk |-> buffer_data_r[fifo.buffer_head_r] == in_data;
 endproperty
 
-property buffer_val_reset_assertion;
-  @ (posedge clk)
-  (!rst_n) |-> 
-  (!$stable(fifo.buffer_val_r) && fifo.buffer_val_r === 0);
+as__PushDataCorrectness : assert property (as__PushDataCorrectness);
+
+property as__PopDataCorrectness;
+  @(posedge clk) out_hsk |-> out_data == $past(buffer_data_r[fifo.buffer_tail_r]);
 endproperty
 
-property buffer_data_reset_assertion;
-  @ (posedge clk)
-  (!rst_n) |->
-  (!$stable(fifo.buffer_data_r) && fifo.buffer_data_r === '0);
+as__PopDataCorrectness : assert property (as__PopDataCorrectness);
+
+property as__BufferFullness;
+  @(posedge clk) !in_rdy |-> (fifo.buffer_head_r - fifo.buffer_tail_r) == INFLIGHT - 1;
 endproperty
 
-property buffer_data_update_assertion;
-  @ (posedge clk)
-  (in_val && in_rdy) |->
-  (fifo.buffer_data_r[fifo.buffer_head_r] === in_data);
+as__BufferFullness : assert property (as__BufferFullness);
+
+property as__BufferEmptyness;
+  @(posedge clk) !out_val |-> fifo.buffer_head_r == fifo.buffer_tail_r;
 endproperty
 
-property out_data_assertion;
-  @ (posedge clk)
-  (out_val) |->
-  (out_data === fifo.buffer_data_r[fifo.buffer_tail_r]);
-endproperty
-
-property out_val_assertion;
-  @ (posedge clk)
-  out_val |->
-  (|fifo.buffer_val_r);
-endproperty
-
-property in_rdy_assertion;
-  @ (posedge clk)
-  in_rdy |->
-  (!(&fifo.buffer_val_r));
-endproperty
-
-assert property (reset_assertions);
-assert property (in_hsk_assertions);
-assert property (out_hsk_assertions);
-assert property (buffer_val_reset_assertion);
-assert property (buffer_data_reset_assertion);
-assert property (buffer_data_update_assertion);
-assert property (out_data_assertion);
-assert property (out_val_assertion);
-assert property (in_rdy_assertion);
+as__BufferEmptyness : assert property (as__BufferEmptyness);
 
 
 endmodule
