@@ -123,15 +123,16 @@ RULES:
 SVA assertions are written within a property file, but DO NOT rewrite the module interface and DO NOT add includes in the property file (as we already have them in the property file).
 DO NOT declare properties, ONLY assertions named as__<NAME> : assert property (<expression>). Do not add @(posedge clk) to the expression.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
-|-> is a same-cycle assertion (the antecedent and consequent are evaluated in the same cycle)
-|=> is a next-cycle assertion (the antecedent is evaluated in the current cycle and the consequent in the next cycle)
-Signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle
-Signals NOT ending in _r represent combinational logic and thus, the updated value is available in the current cycle.
-When referencing combinational logic (signals NOT ending in _r) on the consequent of a next-cycle assertion, USE $past() to refer to the value of the signal in the previous cycle
-When referencing flip-flops (signals ending in _r) on the consequent of a next-cycle assertion, we do NOT use $past() to refer to the updated value of the signal.
+In a same-cycle assertion (|->): the antecedent and consequent are evaluated in the same cycle.
+In a next-cycle assertion (|=>): the antecedent is evaluated in the current cycle and the consequent in the next cycle.
+Signals ending in _r represent flip-flops (registers) and thus, the updated value becomes available in the next cycle.
+Signals NOT ending in _r represent combinational logic and thus, the assigned value is available in the current cycle.
+When referencing combinational logic on the consequent of a next-cycle assertion (|=>), USE $past() to refer to the value of the logic in the previous cycle.
+When referencing flip-flops on the consequent of a next-cycle assertion (|=>), we DO NOT USE $past() to refer to the updated value of the flip-flop.
+When referencing flip-flops on the consequent of a same-cycle assertion (|->), we DO NOT USE $past() to refer to the current value of the flip-flop (before the update).
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
-Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>
-NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>
+Referencing internal signals in assertions ALWAYS requires prepending the name of the module before the signal name, e.g., fifo.<internal_signal>.
+NEVER reference internal signals without the module name prefix, e.g., fifo.<internal_signal>.
 EVERY time you reference an internal signal in an assertion, you MUST specify the module name prefix.
 
 Write SVA assertions to check correctness of ALL the functionality of the module but the reset behavior.

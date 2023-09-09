@@ -95,57 +95,63 @@ assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
 
-// Property file
 
-// Check if buffer_val_r is set whenever an input handshake is observed
-as__buffer_val_r_set_on_in_hsk : assert property (
-    fifo.in_hsk |-> fifo.add_buffer[fifo.buffer_head_r]
+
+
+// Property File
+
+// Check: If the input handshake occurs (both in_val and in_rdy are high), in the next cycle, the buffer_head_r should increment.
+as__buffer_head_increment : assert property (
+    fifo.in_val && fifo.in_rdy |=> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1
 );
 
-// Check if buffer_val_r is cleared whenever an output handshake is observed and buffer_val_r for that slot was previously set
-as__buffer_val_r_clr_on_out_hsk : assert property (
-    fifo.out_hsk && fifo.buffer_val_r[fifo.buffer_tail_r] |-> !fifo.clr_buffer[fifo.buffer_tail_r]
+// Check: If the output handshake occurs (both out_val and out_rdy are high), in the next cycle, the buffer_tail_r should increment.
+as__buffer_tail_increment : assert property (
+    fifo.out_val && fifo.out_rdy |=> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1
 );
 
-// Check that when input is ready and valid, the buffer value at buffer_head_r position is NOT set (free slot available)
-as__buffer_slot_free_on_in_hsk : assert property (
-    fifo.in_hsk |-> !fifo.buffer_val_r[$past(fifo.buffer_head_r)]
+// Check: Data written into the FIFO (when input handshake occurs) should be the same data that is read out from the FIFO (when output handshake occurs).
+as__data_integrity : assert property (
+    (fifo.in_val && fifo.in_rdy) |=> $rose(fifo.out_val) implies fifo.out_data == $past(fifo.in_data)
 );
 
-// Check that when output is ready and valid, the buffer value at buffer_tail_r position is set (data available for read)
-as__buffer_data_available_on_out_hsk : assert property (
-    fifo.out_hsk |-> fifo.buffer_val_r[$past(fifo.buffer_tail_r)]
+// Check: If input is ready (in_rdy is high) and input handshake hasn't occurred yet, the buffer_head_r should remain the same in the next cycle.
+as__buffer_head_no_increment : assert property (
+    fifo.in_rdy && !fifo.in_val |=> fifo.buffer_head_r == $past(fifo.buffer_head_r)
 );
 
-// Check that data is stored correctly into the buffer on input handshake
-as__buffer_data_stored_on_in_hsk : assert property (
-    fifo.in_hsk |-> fifo.buffer_data_r[fifo.buffer_head_r] == $past(fifo.in_data)
+// Check: If output is ready (out_rdy is high) and output handshake hasn't occurred yet, the buffer_tail_r should remain the same in the next cycle.
+as__buffer_tail_no_increment : assert property (
+    fifo.out_rdy && !fifo.out_val |=> fifo.buffer_tail_r == $past(fifo.buffer_tail_r)
 );
 
-// When output is ready and valid, the output data matches the data from the buffer at buffer_tail_r position
-as__out_data_matches_buffer : assert property (
-    fifo.out_val && fifo.out_rdy |-> fifo.out_data == fifo.buffer_data_r[$past(fifo.buffer_tail_r)]
+// Check: If all the buffers are occupied, input will not be ready for new data.
+as__input_not_ready : assert property (
+    &fifo.buffer_val_r |-> !fifo.in_rdy
 );
 
-// Check that buffer is not full when input is ready
-as__buffer_not_full_on_in_rdy : assert property (
-    fifo.in_rdy |-> !(&fifo.buffer_val_r)
+// Check: If none of the buffers are occupied, there will be no valid data available for output.
+as__output_not_valid : assert property (
+    !|fifo.buffer_val_r |-> !fifo.out_val
 );
 
-// Check that buffer is not empty when output is valid
-as__buffer_not_empty_on_out_val : assert property (
-    fifo.out_val |-> (|fifo.buffer_val_r)
+// Check: If a buffer is added this cycle, the same buffer should not be cleared in the same cycle.
+as__add_buffer_not_cleared : assert property (
+    foreach (fifo.add_buffer[i]) (
+        fifo.add_buffer[i] |-> !fifo.clr_buffer[i]
+    )
 );
 
-// Check that buffer_head_r increments on input handshake
-as__buffer_head_r_increment_on_in_hsk : assert property (
-    fifo.in_hsk |=> fifo.buffer_head_r == $past(fifo.buffer_head_r) + 1
+// Check: If a buffer is occupied, it should remain occupied until cleared.
+as__buffer_val_persistence : assert property (
+    foreach (fifo.buffer_val_r[i]) (
+        (fifo.buffer_val_r[i] && !$rose(fifo.clr_buffer[i])) |-> fifo.buffer_val_r[i]
+    )
 );
 
-// Check that buffer_tail_r increments on output handshake
-as__buffer_tail_r_increment_on_out_hsk : assert property (
-    fifo.out_hsk |=> fifo.buffer_tail_r == $past(fifo.buffer_tail_r) + 1
-);
+
+
+
 
 
 
