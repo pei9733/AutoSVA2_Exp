@@ -1,57 +1,45 @@
 ```sv
-// Property File
+// Property File for FIFO module
 
-// Check: When there's an input handshake, the next value of buffer_head_reg increments.
-as__buffer_head_increment: assert property (
-    fifo.in_hsk |=> fifo.buffer_head_reg == $past(fifo.buffer_head_reg + 1'b1)
-);
+// Ensure that when 'in_val' is high and 'in_rdy' is not set, then the FIFO is full
+as__fifo_full_when_not_ready:
+assert property (fifo.in_val && !fifo.in_rdy |-> &fifo.buffer_val_reg);
 
-// Check: When there's an output handshake, the next value of buffer_tail_reg increments.
-as__buffer_tail_increment: assert property (
-    fifo.out_hsk |=> fifo.buffer_tail_reg == $past(fifo.buffer_tail_reg + 1'b1)
-);
+// Ensure that when 'out_val' is high and 'out_rdy' is not set, then the FIFO is empty
+as__fifo_empty_when_not_valid:
+assert property (fifo.out_val && !fifo.out_rdy |-> !(|fifo.buffer_val_reg));
 
-// Check: When the FIFO is empty (all buffer values are zero), out_val signal should be 0.
-as__out_val_when_empty: assert property (
-    !(|fifo.buffer_val_reg) |-> !fifo.out_val
-);
+// When data is written to FIFO, the 'buffer_head_reg' should increment in the next cycle
+as__head_incremented_on_write:
+assert property (fifo.in_hsk |=> $past(fifo.buffer_head_reg) + 1'b1 == fifo.buffer_head_reg[INFLIGHT_IDX-1:0]);
 
-// Check: When the FIFO is full (all buffer values are one), in_rdy signal should be 0.
-as__in_rdy_when_full: assert property (
-    &fifo.buffer_val_reg |-> !fifo.in_rdy
-);
+// When data is read from FIFO, the 'buffer_tail_reg' should increment in the next cycle
+as__tail_incremented_on_read:
+assert property (fifo.out_hsk |=> $past(fifo.buffer_tail_reg) + 1'b1 == fifo.buffer_tail_reg[INFLIGHT_IDX-1:0]);
 
-// Check: If an add_buffer flag is set for a specific index, the corresponding buffer_val_reg should be set in the next cycle.
+// If FIFO is not full and input handshake is true, the data at 'buffer_head_reg' index should be 'in_data' in the next cycle
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_add_buffer_set
-        as__buffer_val_set_when_add_buffer: assert property (
-            fifo.add_buffer[i] |=> fifo.buffer_val_reg[i]
-        );
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_data_on_write
+        as__data_correctly_written:
+        assert property (fifo.in_hsk && !(|fifo.buffer_val_reg) && (fifo.buffer_head_reg == i) |=> fifo.buffer_data_reg[i] == $past(fifo.in_data));
     end
 endgenerate
 
-// Check: If an clr_buffer flag is set for a specific index, the corresponding buffer_val_reg should be clear in the next cycle.
+// If FIFO is not empty and output handshake is true, the data at 'buffer_tail_reg' index should be sent out in the same cycle
 generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_clr_buffer_clear
-        as__buffer_val_clear_when_clr_buffer: assert property (
-            fifo.clr_buffer[i] |=> !fifo.buffer_val_reg[i]
-        );
+    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_data_on_read
+        as__data_correctly_read:
+        assert property (fifo.out_hsk && |fifo.buffer_val_reg && (fifo.buffer_tail_reg == i) |-> fifo.out_data == fifo.buffer_data_reg[i]);
     end
 endgenerate
 
-// Check: When add_buffer flag is set for an index, the next value of buffer_data_reg at that index should be in_data.
-generate
-    for (genvar i = 0; i < INFLIGHT; i = i + 1) begin: check_buffer_data_when_add_buffer
-        as__buffer_data_set_when_add_buffer: assert property (
-            fifo.add_buffer[i] |=> fifo.buffer_data_reg[i] == $past(fifo.in_data)
-        );
-    end
-endgenerate
+// If the buffer is full, 'in_rdy' should be low
+as__input_not_ready_when_full:
+assert property (&fifo.buffer_val_reg |-> !fifo.in_rdy);
 
-// Check: out_data should always be the value of buffer_data_reg at the index of buffer_tail_reg.
-as__out_data_matches_tail_data: assert property (
-    fifo.out_data == fifo.buffer_data_reg[fifo.buffer_tail_reg]
-);
+// If the buffer is empty, 'out_val' should be low
+as__output_not_valid_when_empty:
+assert property (!(|fifo.buffer_val_reg) |-> !fifo.out_val);
 
 ```
-Note: The given properties cover a wide range of the FIFO's behaviors. It's important to test these assertions in a testbench with various scenarios to ensure they capture the intended functionality of the FIFO.
+Note: The assertions are high-level, abstracting away much of the underlying implementation details of the module. They aim to capture the primary behaviors and expectations of the FIFO operation.
