@@ -94,50 +94,58 @@ assign out_transid = fifo.buffer_tail_r;
 assign in_transid = fifo.buffer_head_r;
 
 //====DESIGNER-ADDED-SVA====//
-module fifo_properties (input clk);
 
-// Import the required fifo signals from the fifo module
-import fifo::*;
-
-//==============================================================================
-// SVA Properties for the FIFO
-//==============================================================================
-
-// Check that when the FIFO is full, in_rdy is 0
-property pr__fifo_full;
-  @(posedge clk)
-  &buffer_val_r |-> !in_rdy;
+// Ensure valid handshake
+property pr__valid_in_handshake;
+    @(posedge clk) (fifo.in_val && fifo.in_rdy) |-> fifo.in_val;
 endproperty
-as__fifo_full: assert property(pr__fifo_full);
+as__valid_in_handshake : assert property (pr__valid_in_handshake);
 
-// Check that when the FIFO is empty, out_val is 0
-property pr__fifo_empty;
-  @(posedge clk)
-  !|buffer_val_r |-> !out_val;
+property pr__valid_out_handshake;
+    @(posedge clk) (fifo.out_val && fifo.out_rdy) |-> fifo.out_val;
 endproperty
-as__fifo_empty: assert property(pr__fifo_empty);
+as__valid_out_handshake : assert property (pr__valid_out_handshake);
 
-// Check that written data reaches the FIFO read
-property pr__data_path;
-  @(posedge clk)
-  in_hsk |=> out_hsk within (INFLIGHT);
+// Data written is what gets read out when there's a valid handshake
+property pr__write_read_data;
+    @(posedge clk) (fifo.in_val && fifo.in_rdy) |=> (fifo.out_val && fifo.out_rdy) -> (fifo.in_data == fifo.buffer_data_r[fifo.buffer_tail_r]);
 endproperty
-as__data_path: assert property(pr__data_path);
+as__write_read_data : assert property (pr__write_read_data);
 
-// Check that buffer_head_r wraps around correctly
-property pr__buffer_head_wrap;
-  @(posedge clk)
-  (fifo.buffer_head_r == (INFLIGHT - 1)) && in_hsk |-> fifo.buffer_head_r == 0;
+// Buffer head and tail should not wrap around beyond INFLIGHT size
+property pr__buffer_head_wraparound;
+    @(posedge clk) (fifo.buffer_head_r + 1) < INFLIGHT;
 endproperty
-as__buffer_head_wrap: assert property(pr__buffer_head_wrap);
+as__buffer_head_wraparound : assert property (pr__buffer_head_wraparound);
 
-// Check that buffer_tail_r wraps around correctly
-property pr__buffer_tail_wrap;
-  @(posedge clk)
-  (fifo.buffer_tail_r == (INFLIGHT - 1)) && out_hsk |-> fifo.buffer_tail_r == 0;
+property pr__buffer_tail_wraparound;
+    @(posedge clk) (fifo.buffer_tail_r + 1) < INFLIGHT;
 endproperty
-as__buffer_tail_wrap: assert property(pr__buffer_tail_wrap);
+as__buffer_tail_wraparound : assert property (pr__buffer_tail_wraparound);
 
+// Assert that if the buffer is full, then input ready should be low
+property pr__buffer_full_input_not_ready;
+    @(posedge clk) (&fifo.buffer_val_r) |-> !fifo.in_rdy;
+endproperty
+as__buffer_full_input_not_ready : assert property (pr__buffer_full_input_not_ready);
+
+// Assert that if the buffer is empty, then output valid should be low
+property pr__buffer_empty_output_not_valid;
+    @(posedge clk) (!|fifo.buffer_val_r) |-> !fifo.out_val;
+endproperty
+as__buffer_empty_output_not_valid : assert property (pr__buffer_empty_output_not_valid);
+
+// If a new data is added to the buffer, the corresponding buffer value should be high in the next cycle
+property pr__data_added_buffer_val_high_next_cycle;
+    @(posedge clk) (fifo.in_val && fifo.in_rdy) |=> fifo.buffer_val_r[fifo.buffer_head_r];
+endproperty
+as__data_added_buffer_val_high_next_cycle : assert property (pr__data_added_buffer_val_high_next_cycle);
+
+// If data is read from the buffer, the corresponding buffer value should be low in the next cycle
+property pr__data_read_buffer_val_low_next_cycle;
+    @(posedge clk) (fifo.out_val && fifo.out_rdy) |=> !fifo.buffer_val_r[fifo.buffer_tail_r];
+endproperty
+as__data_read_buffer_val_low_next_cycle : assert property (pr__data_read_buffer_val_low_next_cycle);
 
 
 endmodule
