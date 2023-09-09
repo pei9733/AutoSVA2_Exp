@@ -124,7 +124,7 @@ endmodule
 /*
 RULES:
 SVA assertions are written within a property file, but DO NOT rewrite the module interface and DO NOT add includes in the property file (as we already have them in the property file).
-DO NOT declare properties, ONLY assertions named as__<NAME> : assert property (<expression>). Do not add @(posedge clk) to the expression.
+DO NOT declare properties, ONLY assertions named as__<NAME>: assert property (<EXPRESSION>). DO NOT use [] within NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 
 In a same-cycle assertion (|->): the precondition and postcondition are evaluated in the same cycle.
