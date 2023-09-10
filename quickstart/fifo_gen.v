@@ -107,7 +107,7 @@ end
 // Write logic
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) wr_ptr_reg <= 0;
-    else if (in_val && in_rdy && !full_reg) begin
+    else if (in_val && in_rdy) begin
         fifo_storage_reg[wr_ptr_reg] <= in_data;
         wr_ptr_reg <= next_wr_ptr[INFLIGHT_IDX-1:0]; // Wrapping around logic is inherently handled by the overflow of the pointer
     end
@@ -116,7 +116,7 @@ end
 // Read logic
 always @(posedge clk or negedge rst_n) begin
     if (!rst_n) rd_ptr_reg <= 0;
-    else if (out_val && out_rdy && !empty_reg) begin
+    else if (out_val && out_rdy) begin
         rd_ptr_reg <= next_rd_ptr[INFLIGHT_IDX-1:0]; // Wrapping around logic is inherently handled by the overflow of the pointer
     end
 end
