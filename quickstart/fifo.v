@@ -39,7 +39,7 @@
 //==================================================================================================
 
 
-module multiplier
+module fifo
   #(
     // Configuration Parameters
     parameter INFLIGHT_IDX = 2,
@@ -60,7 +60,7 @@ module multiplier
 );
 
 genvar j;
-// Note that the number of multiplier slots is always a power of 2
+// Note that the number of fifo slots is always a power of 2
 localparam INFLIGHT = 2**INFLIGHT_IDX;
 
 reg [INFLIGHT    -1:0] buffer_val_reg;
@@ -95,7 +95,7 @@ end
 generate
     for ( j = 0; j < INFLIGHT; j = j + 1) begin: buffers_gen
         always @(posedge clk) begin
-            // Bitmap of the multiplier slot that contain valid data.
+            // Bitmap of the fifo slot that contain valid data.
             if (!rst_n) begin
               buffer_val_reg [j] <= 1'b0;
             end else begin
