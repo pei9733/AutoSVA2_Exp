@@ -131,6 +131,7 @@ $countones(bitarray) returns the number of ONES in bitarray.
 |bitarray means that SOME bits is ONES.
 !(|bitarray) means that NONE of the bits are ONES, i.e., ALL the bits are ZEROS.
 
+
 Same-cycle assertions (|->): the precondition and postcondition are evaluated in the same cycle.
 Next-cycle assertions (|=>): the precondition is evaluated in the current cycle and the postcondition in the next cycle.
 Signals ending in _reg are registers: the assigned value changes in the next cycle.
@@ -139,7 +140,7 @@ The assigned value to wires (signals NOT ending in _reg) can be referenced in th
 USE a same-cycle assertion (|->) to reason about behavior ocurring in the same cycle.
 USE a next-cycle assertion (|=>) to reason about behavior ocurring in the next cycle, for example, the updated value of a _reg.
 USE same-cycle assertions (|->) when reasoning about the assigned value of wires (signals NOT ending in _reg).
-USE next-cycle assertions (|=>) when reasoning about the updated value of a _reg.
+USE next-cycle assertions (|=>) when reasoning about the data being added to _reg.
 DO NOT USE $past() in preconditions, ONLY in postconditions.
 DO NOT USE $past() on the postcondition of same-cycle assertion (|->).
 On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the value of wires.
