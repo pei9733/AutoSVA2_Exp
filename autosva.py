@@ -272,6 +272,7 @@ def parse_signal(line, annotation):
         signals[name] = entry
 
 def parse_fields(prop):
+    if (verbose):  print("Parsing fields")
     options = "("
     list = []
     for impl_name in implications:
@@ -287,25 +288,26 @@ def parse_fields(prop):
     for signal_name in fields:
         #separate iface_name and field_name (annotation)
         annotation_match = re.search(options+"_(\w+)", signal_name)
-        if (check_annotation(annotation_match, signal_name)):
-            abort_tool(prop)
-        interface = annotation_match.group(1)
-        suffix = annotation_match.group(2)
-        if (verbose):  print("PF iface: " + interface + ", suffix: " + suffix)
-        # Append the to interface entry of the dict, the suffix
-        if (not interface in suffixes):
-            suffixes[interface] = []
-        suffixes[interface].append(suffix)
+        # if (check_annotation(annotation_match, signal_name)):
+        #     abort_tool(prop)
+        if annotation_match:
+            interface = annotation_match.group(1)
+            suffix = annotation_match.group(2)
+            if (verbose):  print("PF iface: " + interface + ", suffix: " + suffix)
+            # Append the to interface entry of the dict, the suffix
+            if (not interface in suffixes):
+                suffixes[interface] = []
+            suffixes[interface].append(suffix)
 
-        #field is the type of annotation
-        field = fields[signal_name]
-        for impl_name in implications:
-            #print("PF implication_name: " + str(impl_name));
-            entry = implications[impl_name]
-            if entry["p"] == interface:
-                update_entry(field, impl_name, "p_", suffix)
-            if entry["q"] == interface:
-                update_entry(field, impl_name, "q_", suffix)
+            #field is the type of annotation
+            field = fields[signal_name]
+            for impl_name in implications:
+                #print("PF implication_name: " + str(impl_name));
+                entry = implications[impl_name]
+                if entry["p"] == interface:
+                    update_entry(field, impl_name, "p_", suffix)
+                if entry["q"] == interface:
+                    update_entry(field, impl_name, "q_", suffix)
 
 def update_entry(field, impl_name, type, suffix):
     global implications
