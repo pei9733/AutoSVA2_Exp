@@ -9,7 +9,48 @@ This is the Specification of a FIFO queue.
 - pop_data MUST BE usable the same cycle that pop_val is active.
 - The module MUST handle push and pop at the same time.
 
+// If input is valid and the FIFO is not full, then the FIFO should be ready to accept the data.
+as__input_ready_when_not_full:
+assert property (fifo_gen.in_val && !fifo_gen.full_reg |-> fifo_gen.in_rdy);
+
+// If output is requested and the FIFO is not empty, then output should be valid.
+as__output_valid_when_not_empty:
+assert property (!fifo_gen.empty_reg |-> fifo_gen.out_val);
+
+// If input is valid and FIFO is ready (not full), then the write pointer should increment in the next cycle.
+as__write_pointer_increment:
+assert property (fifo_gen.in_val && fifo_gen.in_rdy |=> $past(fifo_gen.wr_ptr_reg) + 1'b1 == fifo_gen.wr_ptr_reg);
+
+// If output is valid and FIFO is ready (not empty), then the read pointer should increment in the next cycle.
+as__read_pointer_increment:
+assert property (fifo_gen.out_rdy && fifo_gen.out_val |=> $past(fifo_gen.rd_ptr_reg) + 1'b1 == fifo_gen.rd_ptr_reg);
+
+// If write pointer wraps around, it should not increment but reset to zero.
+as__write_pointer_wrap_around:
+assert property ((fifo_gen.wr_ptr_reg) == INFLIGHT-1 && fifo_gen.in_val && fifo_gen.in_rdy |=> fifo_gen.wr_ptr_reg == 0);
+
+// If read pointer wraps around, it should not increment but reset to zero.
+as__read_pointer_wrap_around:
+assert property ((fifo_gen.rd_ptr_reg) == INFLIGHT-1 && fifo_gen.out_rdy && fifo_gen.out_val |=> fifo_gen.rd_ptr_reg == 0);
+
+as__pointers_equal_when_empty:
+assert property (fifo_gen.in_val && fifo_gen.in_rdy && (((fifo_gen.wr_ptr_reg + 1'b1) % INFLIGHT) == fifo_gen.rd_ptr_reg) && !(fifo_gen.out_val && fifo_gen.out_rdy) |=> fifo_gen.empty_reg);
+
+as__fifo_full_condition:
+assert property (fifo_gen.out_val && fifo_gen.out_rdy && (((fifo_gen.rd_ptr_reg + 1) % INFLIGHT) == fifo_gen.wr_ptr_reg) && !(fifo_gen.in_val && fifo_gen.in_rdy) |=> fifo_gen.full_reg);
+
+// If FIFO is not empty and output is ready, the out_data should get the value at the current read pointer.
+as__out_data_on_read:
+assert property (!fifo_gen.empty_reg && fifo_gen.out_rdy |-> fifo_gen.out_data == fifo_gen.fifo_storage_reg[fifo_gen.rd_ptr_reg]);
+
+// When input is valid, data should be written to the FIFO at the current write pointer.
+as__in_data_on_write:
+assert property (fifo_gen.in_val && fifo_gen.in_rdy |=> fifo_gen.fifo_storage_reg[$past(fifo_gen.wr_ptr_reg)] == $past(fifo_gen.in_data));
+
+
 Implement the following module only using synthesizable Verilog.
+DO NOT write the module interface, only the implementation.
+DO NOT answer anything except for the Verilog implementation, ONLY write comments within the Verilog code.
 Append "_reg" to the name of ALL registers.
 */
 
@@ -35,21 +76,76 @@ module fifo_gen_prop
 //==============================================================================
 // Local Parameters
 //==============================================================================
-localparam INFLIGHT = 2**INFLIGHT_IDX;
 
+localparam INFLIGHT = 2**INFLIGHT_IDX;
 genvar j;
 default clocking cb @(posedge clk);
 endclocking
 default disable iff (!rst_n);
 
 // Re-defined wires 
+wire [INFLIGHT_IDX-1:0] in_transid;
+wire [INFLIGHT_IDX-1:0] out_transid;
 
 // Symbolics and Handshake signals
+wire [INFLIGHT_IDX-1:0] symb_in_transid;
+am__symb_in_transid_stable: assume property($stable(symb_in_transid));
+wire out_hsk = out_val && out_rdy;
+wire in_hsk = in_val && in_rdy;
 
 //==============================================================================
 // Modeling
 //==============================================================================
 
+// Modeling incoming request for fifo
+if (ASSERT_INPUTS) begin
+	as__fifo_fairness: assert property (out_val |-> s_eventually(out_rdy));
+end else begin
+	am__fifo_fairness: assume property (out_val |-> s_eventually(out_rdy));
+end
+
+// Generate sampling signals and model
+reg [3:0] fifo_transid_sampled;
+wire fifo_transid_set = in_hsk && in_transid == symb_in_transid;
+wire fifo_transid_response = out_hsk && out_transid == symb_in_transid;
+
+always_ff @(posedge clk) begin
+	if(!rst_n) begin
+		fifo_transid_sampled <= '0;
+	end else if (fifo_transid_set || fifo_transid_response ) begin
+		fifo_transid_sampled <= fifo_transid_sampled + fifo_transid_set - fifo_transid_response;
+	end
+end
+co__fifo_transid_sampled: cover property (|fifo_transid_sampled);
+if (ASSERT_INPUTS) begin
+	as__fifo_transid_sample_no_overflow: assert property (fifo_transid_sampled != '1 || !fifo_transid_set);
+end else begin
+	am__fifo_transid_sample_no_overflow: assume property (fifo_transid_sampled != '1 || !fifo_transid_set);
+end
+
+
+// Assert that if valid eventually ready or dropped valid
+as__fifo_transid_hsk_or_drop: assert property (in_val |-> s_eventually(!in_val || in_rdy));
+// Assert that every request has a response and that every reponse has a request
+as__fifo_transid_eventual_response: assert property (|fifo_transid_sampled |-> s_eventually(out_val && (out_transid == symb_in_transid) ));
+as__fifo_transid_was_a_request: assert property (fifo_transid_response |-> fifo_transid_set || fifo_transid_sampled);
+
+
+// Modeling data integrity for fifo_transid
+reg [SIZE-1:0] fifo_transid_data_model;
+always_ff @(posedge clk) begin
+	if(!rst_n) begin
+		fifo_transid_data_model <= '0;
+	end else if (fifo_transid_set) begin
+		fifo_transid_data_model <= in_data;
+	end
+end
+
+as__fifo_transid_data_unique: assert property (|fifo_transid_sampled |-> !fifo_transid_set);
+as__fifo_transid_data_integrity: assert property (|fifo_transid_sampled && fifo_transid_response |-> (out_data == fifo_transid_data_model));
+
+assign out_transid = fifo_gen.rd_ptr_reg;
+assign in_transid = fifo_gen.wr_ptr_reg;
 
 //====DESIGNER-ADDED-SVA====//
 
@@ -94,8 +190,9 @@ as__out_data_on_read:
 as__in_data_on_write:
     assert property (fifo_gen.in_val && fifo_gen.in_rdy |=> fifo_gen.fifo_storage_reg[$past(fifo_gen.wr_ptr_reg)] == $past(fifo_gen.in_data));
 
+
 // Property File for fifo_gen module
-/*
+
 // The FIFO should not write new data when it's full
 as__write_when_full: assert property (
     !(fifo_gen.in_val && fifo_gen.in_rdy && fifo_gen.full_reg)
@@ -178,7 +275,7 @@ as__output_valid_signal: assert property (
     !fifo_gen.empty_reg |-> fifo_gen.out_val == 1'b1
 );
 
-*/
+
 
 
 endmodule

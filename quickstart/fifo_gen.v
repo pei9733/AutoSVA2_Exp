@@ -62,6 +62,11 @@ module fifo_gen
     input  wire                          clk,
     input  wire                          rst_n,
 
+    /*AUTOSVA
+    fifo: in -IN> out
+    [INFLIGHT_IDX-1:0] in_transid = fifo_gen.wr_ptr_reg
+    [INFLIGHT_IDX-1:0] out_transid = fifo_gen.rd_ptr_reg
+    */
     input  wire                          in_val,
     output wire                          in_rdy,
     input  wire [SIZE-1:0]               in_data,
