@@ -257,6 +257,100 @@ assign ptw_res_val = req_port_i.data_rvalid;
 
 //====DESIGNER-ADDED-SVA====//
 
+typedef enum logic [2:0] {
+    IDLE,
+    WAIT_GRANT,
+    PTE_LOOKUP,
+    WAIT_RVALID,
+    PROPAGATE_ERROR,
+    PROPAGATE_ACCESS_ERROR
+} state_t;
+
+// SV39 defines three levels of page tables
+typedef enum logic [1:0] {
+    LVL1, 
+    LVL2, 
+    LVL3
+} level_t;
+
+// Property File
+
+// PROPERTY FILE
+
+// When translation is enabled and there is an instruction TLB access without a hit and no data TLB access,
+// it is expected that the module is preparing to access the translation table for instruction TLB.
+as__instruction_tlb_miss: assert property (
+    enable_translation_i & itlb_access_i & ~itlb_hit_i & ~dtlb_access_i |-> 
+    ptw.ptw_pptr_n == {ptw.satp_ppn_i, ptw.itlb_vaddr_i[riscv::SV-1:30], 3'b0} &&
+    ptw.is_instr_ptw_n == 1'b1 &&
+    ptw.state_d == ptw.WAIT_GRANT
+);
+
+// When load-store translation is enabled and there's a data TLB access without a hit,
+// it is expected that the module is preparing to access the translation table for data TLB.
+as__data_tlb_miss: assert property (
+    ptw.en_ld_st_translation_i & ptw.dtlb_access_i & ~ptw.dtlb_hit_i |-> 
+    ptw.ptw_pptr_n == {ptw.satp_ppn_i, ptw.dtlb_vaddr_i[riscv::SV-1:30], 3'b0} &&
+    ptw.state_d == ptw.WAIT_GRANT
+);
+
+// When a request to access the translation table is granted, the module is expected to begin PTE lookup.
+as__data_request_granted: assert property (
+    ptw.req_port_i.data_gnt |-> 
+    ptw.tag_valid_n == 1'b1 &&
+    ptw.state_d == ptw.PTE_LOOKUP
+);
+
+// If a valid PTE entry is found during lookup, and its 'g' bit is set, the global mapping is set.
+as__global_mapping_set: assert property (
+    ptw.data_rvalid_q & ptw.pte.g |-> ptw.global_mapping_n == 1'b1
+);
+
+// Check if the module correctly signals an error for invalid PTE entries.
+as__pte_error: assert property (
+    ptw.data_rvalid_q & (!ptw.pte.v || (!ptw.pte.r && ptw.pte.w)) |-> 
+    ptw.state_d == ptw.PROPAGATE_ERROR
+);
+
+// When an instruction is not allowed access, it's expected to propagate an access error.
+as__instruction_access_error: assert property (
+    !ptw.allow_access & ptw.data_rvalid_q & ptw.is_instr_ptw_q |-> 
+    ptw.itlb_update_o.valid == 1'b0 &&
+    ptw.state_d == ptw.PROPAGATE_ACCESS_ERROR
+);
+
+// When a data operation is not allowed access, it's expected to propagate an access error.
+as__data_access_error: assert property (
+    !ptw.allow_access & ptw.data_rvalid_q & ~ptw.is_instr_ptw_q |-> 
+    ptw.dtlb_update_o.valid == 1'b0 &&
+    ptw.state_d == ptw.PROPAGATE_ACCESS_ERROR
+);
+
+// When a flush signal is received, the module is expected to reset its state to IDLE.
+as__flush_signal: assert property (
+    ptw.flush_i |-> ptw.state_d == ptw.IDLE
+);
+
+// The PTW should be marked as active only when it's not in the IDLE state.
+as__ptw_activity: assert property (
+    ptw.ptw_active_o == (ptw.state_q != ptw.IDLE)
+);
+
+// The address index being accessed in the cache should align with the PTW's current PPN and VPN.
+as__address_index_alignment: assert property (
+    ptw.req_port_o.address_index == ptw.ptw_pptr_q[DCACHE_INDEX_WIDTH-1:0]
+);
+
+// The address tag being accessed in the cache should align with the PTW's current PPN and VPN.
+as__address_tag_alignment: assert property (
+    ptw.req_port_o.address_tag == ptw.ptw_pptr_q[DCACHE_INDEX_WIDTH+DCACHE_TAG_WIDTH-1:DCACHE_INDEX_WIDTH]
+);
+
+// When PTW receives an access exception signal, bad physical address output should match PTW's current pointer.
+as__bad_physical_address: assert property (
+    ptw.ptw_access_exception_o |-> ptw.bad_paddr_o == ptw.ptw_pptr_q
+);
+
 
 
 endmodule
