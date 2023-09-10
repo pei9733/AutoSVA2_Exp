@@ -90,70 +90,82 @@ end
 as__fifo_transid_data_unique: assert property (|fifo_transid_sampled |-> !fifo_transid_set);
 as__fifo_transid_data_integrity: assert property (|fifo_transid_sampled && fifo_transid_response |-> (out_data == fifo_transid_data_model));
 
-assign out_transid = modul.buffer_tail_reg;
-assign in_transid = modul.buffer_head_reg;
+assign out_transid = multiplier.buffer_tail_reg;
+assign in_transid = multiplier.buffer_head_reg;
 
 //====DESIGNER-ADDED-SVA====//
 
 
 
-// Property File
+// Property File for the module "multiplier"
 
-// Check that when 'in_val' is asserted and 'in_rdy' is deasserted, no buffer space is used (no buffer is added).
-as__in_no_buffer_space:
-  assert property (modul.in_val && !modul.in_rdy |-> !(|modul.add_buffer));
+// Checks that when there's an input handshake (both in_val and in_rdy are high), 
+// the head register gets incremented in the next cycle.
+as__increment_head_on_input_handshake: 
+    assert property (
+        in_hsk |=> multiplier.buffer_head_reg == $past(multiplier.buffer_head_reg) + 1'b1
+    );
 
-// Check that when 'out_val' is asserted and 'out_rdy' is deasserted, no buffer space is freed (no buffer is cleared).
-as__out_no_buffer_space:
-  assert property (modul.out_val && !modul.out_rdy |-> !(|modul.clr_buffer));
+// Checks that when there's an output handshake (both out_val and out_rdy are high), 
+// the tail register gets incremented in the next cycle.
+as__increment_tail_on_output_handshake: 
+    assert property (
+        out_hsk |=> multiplier.buffer_tail_reg == $past(multiplier.buffer_tail_reg) + 1'b1
+    );
 
-// Check that the head of the buffer moves to the next slot only when an in handshake (in_hsk) occurs.
-as__buffer_head_update:
-  assert property (modul.in_hsk |=> $past(modul.buffer_head_reg + {{modul.INFLIGHT_IDX-1{1'b0}}, 1'b1}) == modul.buffer_head_reg);
+// Checks that when the input is ready and there's an input handshake, 
+// a new value is added to the buffer in the current cycle.
+as__add_to_buffer_on_input_handshake:
+    assert property (
+        in_hsk |-> (multiplier.add_buffer == ({{multiplier.INFLIGHT-1{1'b0}}, 1'b1} << multiplier.buffer_head_reg))
+    );
 
-// Check that the tail of the buffer moves to the next slot only when an out handshake (out_hsk) occurs.
-as__buffer_tail_update:
-  assert property (modul.out_hsk |=> $past(modul.buffer_tail_reg + {{modul.INFLIGHT_IDX-1{1'b0}}, 1'b1}) == modul.buffer_tail_reg);
+// Checks that when the output is ready and there's an output handshake, 
+// a value is cleared from the buffer in the current cycle.
+as__clear_from_buffer_on_output_handshake:
+    assert property (
+        out_hsk |-> (multiplier.clr_buffer == ({{multiplier.INFLIGHT-1{1'b0}}, 1'b1} << multiplier.buffer_tail_reg))
+    );
 
-// Ensure that if the buffer is completely full (all buffer_val_reg bits are 1), then 'in_rdy' is deasserted.
-as__buffer_full_in_rdy_deassert:
-  assert property (&modul.buffer_val_reg |-> !modul.in_rdy);
+// Checks that if the output is valid, then some value in the buffer is valid.
+as__output_valid_buffer_validity:
+    assert property (
+        multiplier.out_val |-> (|multiplier.buffer_val_reg)
+    );
 
-// Ensure that if the buffer has at least one slot free (not all buffer_val_reg bits are 1), then 'in_rdy' is asserted.
-as__buffer_not_full_in_rdy_assert:
-  assert property (!(&modul.buffer_val_reg) |-> modul.in_rdy);
+// Checks that if all the values in the buffer are valid, 
+// then the input is not ready.
+as__all_buffer_values_valid_input_not_ready:
+    assert property (
+        &multiplier.buffer_val_reg |-> !multiplier.in_rdy
+    );
 
-// Ensure that if the buffer is completely empty (all buffer_val_reg bits are 0), then 'out_val' is deasserted.
-as__buffer_empty_out_val_deassert:
-  assert property (!(|modul.buffer_val_reg) |-> !modul.out_val);
-
-// Ensure that if the buffer has at least one valid data (any of buffer_val_reg bits is 1), then 'out_val' is asserted.
-as__buffer_not_empty_out_val_assert:
-  assert property (|modul.buffer_val_reg |-> modul.out_val);
-
-// Check that when data is added to a buffer slot (add_buffer[j] is asserted), the data in that slot matches 'in_data' in the next cycle.
+// Checks that the data being added to the buffer on an input handshake is the same 
+// as the input data.
 generate
-  for (genvar j = 0; j < modul.INFLIGHT; j = j + 1) begin : check_data_addition
-    as__data_addition_to_buffer:
-      assert property (modul.add_buffer[j] |=> modul.buffer_data_reg[j] == $past(modul.in_data));
-  end
+    for (genvar i = 0; i < multiplier.INFLIGHT; i = i + 1) begin : data_asserts
+        as__buffer_data_matches_input_data:
+            assert property (
+                multiplier.add_buffer[i] |-> (multiplier.buffer_data_reg[i] == in_data)
+            );
+    end
 endgenerate
 
-// Check that when data is read from a buffer slot (out_hsk is asserted), the read data 'out_data' matches the data in the buffer slot pointed to by buffer_tail_reg.
-as__data_read_from_buffer:
-  assert property (modul.out_hsk |-> modul.out_data == modul.buffer_data_reg[modul.buffer_tail_reg]);
+// Checks that when the buffer is full, the output data corresponds to the data 
+// at the tail of the buffer.
+as__full_buffer_output_data_matches_tail:
+    assert property (
+        &multiplier.buffer_val_reg |-> (multiplier.out_data == multiplier.buffer_data_reg[multiplier.buffer_tail_reg])
+    );
 
-// // Check that the number of filled buffer slots can never exceed INFLIGHT.
-// as__buffer_overflow_check:
-//   assert property (sum(int i = 0; i < modul.INFLIGHT; i = i + 1) modul.buffer_val_reg[i] <= modul.INFLIGHT);
+// Checks that when the buffer is not full, the output data corresponds to the data 
+// at the tail of the buffer.
+as__not_full_buffer_output_data_matches_tail:
+    assert property (
+        !(&multiplier.buffer_val_reg) && (|multiplier.buffer_val_reg) |-> (multiplier.out_data == multiplier.buffer_data_reg[multiplier.buffer_tail_reg])
+    );
 
-// Ensure that when a buffer slot is cleared, the buffer_val_reg for that slot is set to 0 in the next cycle.
-generate
-  for (genvar j = 0; j < modul.INFLIGHT; j = j + 1) begin : check_buffer_clearance
-    as__buffer_slot_clearance:
-      assert property (modul.clr_buffer[j] |=> !modul.buffer_val_reg[j]);
-  end
-endgenerate
+
 
 
 

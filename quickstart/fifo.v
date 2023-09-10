@@ -39,7 +39,7 @@
 //==================================================================================================
 
 
-module modul
+module multiplier
   #(
     // Configuration Parameters
     parameter INFLIGHT_IDX = 2,
@@ -60,7 +60,7 @@ module modul
 );
 
 genvar j;
-// Note that the number of modul slots is always a power of 2
+// Note that the number of multiplier slots is always a power of 2
 localparam INFLIGHT = 2**INFLIGHT_IDX;
 
 reg [INFLIGHT    -1:0] buffer_val_reg;
@@ -95,7 +95,7 @@ end
 generate
     for ( j = 0; j < INFLIGHT; j = j + 1) begin: buffers_gen
         always @(posedge clk) begin
-            // Bitmap of the modul slot that contain valid data.
+            // Bitmap of the multiplier slot that contain valid data.
             if (!rst_n) begin
               buffer_val_reg [j] <= 1'b0;
             end else begin
@@ -125,6 +125,7 @@ DO NOT use [] within assertion NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 Above each assertion, write a comment explaining behavior being checked.
 
+$countones(bitarray) returns the number of ONES in bitarray.
 &bitarray means that ALL the bits  are ONES.
 !(&bitarray) means it's NOT TRUE that ALL the bits are ONES, i.e., SOME of the bits are ZEROS.
 |bitarray means that SOME bits is ONES.
@@ -147,8 +148,8 @@ On the postcondition of next-cycle assertions (|=>), USE $past() to refer to the
 Assertions without precondition DO NOT use |->
 
 Internal signals are those signals NOT present in the module interface. Internal signals are declared within the module.
-Referencing internal signals in the property file ALWAYS requires prepending the name of the module before the signal name, e.g., modul.<internal_signal>.
-NEVER reference internal signals without the module name prefix, e.g., modul.<internal_signal>.
+Referencing internal signals in the property file ALWAYS requires prepending the name of the module before the signal name, e.g., name.<internal_signal>.
+NEVER reference internal signals without the module name prefix, e.g., name.<internal_signal>.
 DO NOT use foreach loops in assertions; Instead, use generate loops.
 
 TASK:
