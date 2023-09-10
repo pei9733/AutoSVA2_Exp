@@ -85,7 +85,7 @@ endmodule
 RULES:
 SVA assertions are written within a property file, but DO NOT rewrite the module interface and DO NOT add includes in the property file (as we already have them in the property file).
 DO NOT declare properties; DECLARE assertions named as__<NAME>: assert property (<EXPRESSION>).
-DO NOT use [] within assertion NAME. Do not add @(posedge clk) to EXPRESSION.
+DO NOT use [] at the end of assertion NAME. Do not add @(posedge clk) to EXPRESSION.
 Assertions must be as high-level as possible, to avoid repeating implementation details.
 Above each assertion, write a comment explaining behavior being checked.
 
