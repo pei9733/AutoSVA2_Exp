@@ -80,11 +80,11 @@ as__write_pointer_wrap_around:
 as__read_pointer_wrap_around:
     assert property ((fifo_gen.rd_ptr_reg) == INFLIGHT-1 && fifo_gen.out_rdy && fifo_gen.out_val |=> fifo_gen.rd_ptr_reg == 0);
 
-as__pointers_equal_when_empty:
-    assert property (fifo_gen.in_val && fifo_gen.in_rdy && (((fifo_gen.wr_ptr_reg + 1'b1) % INFLIGHT) == fifo_gen.rd_ptr_reg) && !(fifo_gen.out_val && fifo_gen.out_rdy) |=> fifo_gen.empty_reg);
+as__fifo_full:
+    assert property (fifo_gen.in_val && fifo_gen.in_rdy && (((fifo_gen.wr_ptr_reg + 1'b1) % INFLIGHT) == fifo_gen.rd_ptr_reg) && !(fifo_gen.out_val && fifo_gen.out_rdy) |=> fifo_gen.full_reg);
 
-as__fifo_full_condition:
-    assert property (fifo_gen.out_val && fifo_gen.out_rdy && (((fifo_gen.rd_ptr_reg + 1) % INFLIGHT) == fifo_gen.wr_ptr_reg) && !(fifo_gen.in_val && fifo_gen.in_rdy) |=> fifo_gen.full_reg);
+as__fifo_empty_condition:
+    assert property (fifo_gen.out_val && fifo_gen.out_rdy && (((fifo_gen.rd_ptr_reg + 1) % INFLIGHT) == fifo_gen.wr_ptr_reg) && !(fifo_gen.in_val && fifo_gen.in_rdy) |=> fifo_gen.empty_reg);
 
 // If FIFO is not empty and output is ready, the out_data should get the value at the current read pointer.
 as__out_data_on_read:

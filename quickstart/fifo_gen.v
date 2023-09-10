@@ -95,10 +95,10 @@ always @(posedge clk or negedge rst_n) begin
         if (in_val && in_rdy && out_val && out_rdy) begin
             // No change in full and empty flags
         end else if (in_val && in_rdy) begin // Data is pushed
-            if (next_wr_ptr == rd_ptr_reg) full_reg <= 1'b1;
+            if (next_wr_ptr[INFLIGHT_IDX-1:0] == rd_ptr_reg) full_reg <= 1'b1;
             empty_reg <= 1'b0;
         end else if (out_val && out_rdy) begin // Data is popped
-            if (wr_ptr_reg == next_rd_ptr) empty_reg <= 1'b1;
+            if (wr_ptr_reg == next_rd_ptr[INFLIGHT_IDX-1:0]) empty_reg <= 1'b1;
             full_reg <= 1'b0;
         end
     end
