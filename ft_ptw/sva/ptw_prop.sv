@@ -93,7 +93,7 @@ wire dtlb_hsk = dtlb_val && dtlb_rdy;
 //==============================================================================
 // Modeling
 //==============================================================================
-/*
+
 // Modeling incoming request for itlb_iface
 // Generate sampling signals and model
 reg [3:0] itlb_iface_transid_sampled;
@@ -254,7 +254,7 @@ assign ptw_res_val = req_port_i.data_rvalid;
 	 as__no_x_itlb_stable: assert property(itlb_val |-> !$isunknown(itlb_stable));
 	 as__no_x_itlb_data: assert property(itlb_val |-> !$isunknown(itlb_data));
 `endif
-*/
+
 //====DESIGNER-ADDED-SVA====//
 
 typedef enum logic [2:0] {
@@ -366,12 +366,12 @@ asgpt__walking_instr_check: assert property (
 
 // Check that when there's a PTW error, the module is in the IDLE state in the next cycle and ptw_error_o is asserted.
 asgpt__ptw_error_check: assert property (
-    ptw.state_q == PROPAGATE_ERROR |=> (ptw.state_d == IDLE && ptw_error_o)
+    ptw.state_q == PROPAGATE_ERROR |-> (ptw.state_d == IDLE && ptw_error_o)
 );
 
 // Check that when there's a PTW access exception, the module is in the IDLE state in the next cycle and ptw_access_exception_o is asserted.
 asgpt__ptw_access_exception_check: assert property (
-    ptw.state_q == PROPAGATE_ACCESS_ERROR |=> (ptw.state_d == IDLE && ptw_access_exception_o)
+    ptw.state_q == PROPAGATE_ACCESS_ERROR |-> (ptw.state_d == IDLE && ptw_access_exception_o)
 );
 
 // Validate correct PTE address update when PTW is in the IDLE state and there's an ITLB miss without any DTLB access.
@@ -443,7 +443,7 @@ asgpt__dtlb_ptw_request: assert property (
 // When a data request is made and granted, the state should transition to PTE_LOOKUP.
 asgpt__data_request_granted: assert property (
     ptw.req_port_o.data_req && req_port_i.data_gnt
-    |=> ptw.state_d == PTE_LOOKUP
+    |-> ptw.state_d == PTE_LOOKUP
 );
 
 // Assert that if the data is ready and the page table entry is invalid or not readable but writable,
@@ -478,7 +478,7 @@ asgpt__unallowed_access_error: assert property (
 asgpt__flush_behavior: assert property (
     flush_i && ((ptw.state_q == PTE_LOOKUP && !ptw.data_rvalid_q) || 
     (ptw.state_q == WAIT_GRANT && req_port_i.data_gnt))
-    |=> ptw.state_d == WAIT_RVALID
+    |-> ptw.state_d == WAIT_RVALID
 );
 
 // Assert that when in WAIT_RVALID state and data is ready, the module should transition to IDLE state.
@@ -506,6 +506,218 @@ asgpt__ptw_inactive_during_reset: assert property (
 );
 
 // Additional checks can be written depending on the remaining internal logic and signals of the ptw module.
+
+
+
+// Property File
+
+// Ensure PTW FSM state remains the same if no transition is taken.
+asgpt__FSM_IDLE_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.IDLE == $past(ptw.state_q)) |-> ptw.state_q == ptw.IDLE
+);
+
+asgpt__FSM_WAIT_GRANT_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.WAIT_GRANT == $past(ptw.state_q)) |-> ptw.state_q == ptw.WAIT_GRANT
+);
+
+asgpt__FSM_PTE_LOOKUP_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.PTE_LOOKUP == $past(ptw.state_q)) |-> ptw.state_q == ptw.PTE_LOOKUP
+);
+
+asgpt__FSM_PROPAGATE_ERROR_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.PROPAGATE_ERROR == $past(ptw.state_q)) |-> ptw.state_q == ptw.PROPAGATE_ERROR
+);
+
+asgpt__FSM_PROPAGATE_ACCESS_ERROR_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.PROPAGATE_ACCESS_ERROR == $past(ptw.state_q)) |-> ptw.state_q == ptw.PROPAGATE_ACCESS_ERROR
+);
+
+asgpt__FSM_WAIT_RVALID_Holds: assert property (
+  disable iff (!rst_ni || flush_i) (ptw.WAIT_RVALID == $past(ptw.state_q)) |-> ptw.state_q == ptw.WAIT_RVALID
+);
+
+// Check PTW outputs are mutually exclusive.
+asgpt__MutuallyExclusiveOutputs: assert property (
+  disable iff (!rst_ni) 
+    (ptw_error_o && ptw_access_exception_o) |-> !(|ptw_error_o & ptw_access_exception_o)
+);
+
+// ITLB miss only when the conditions in the IDLE state are met.
+asgpt__ITLB_Miss_Condition: assert property (
+  disable iff (!rst_ni) 
+    (enable_translation_i & itlb_access_i & ~itlb_hit_i & ~dtlb_access_i) |-> itlb_miss_o
+);
+
+// DTLB miss only when the conditions in the IDLE state are met.
+asgpt__DTLB_Miss_Condition: assert property (
+  disable iff (!rst_ni) 
+    (en_ld_st_translation_i & dtlb_access_i & ~dtlb_hit_i) |-> dtlb_miss_o
+);
+
+// REQ asserted when in WAIT_GRANT state
+asgpt__REQ_Asserted_In_WAIT_GRANT: assert property (
+  disable iff (!rst_ni) 
+    (ptw.WAIT_GRANT == ptw.state_q) |-> req_port_o.data_req
+);
+
+// PTE Lookup checks
+asgpt__PTE_Lookup_ErrorCondition: assert property (
+  disable iff (!rst_ni) 
+    ptw.PTE_LOOKUP == $past(ptw.state_q) && (!pte.v || (!pte.r && pte.w)) |-> ptw.state_q == ptw.PROPAGATE_ERROR
+);
+
+// Flush behavior leading to IDLE or WAIT_RVALID state.
+asgpt__Flush_Behavior: assert property (
+  disable iff (!rst_ni) 
+    flush_i && !ptw.data_rvalid_q && ((ptw.state_q == ptw.PTE_LOOKUP) || ((ptw.state_q == ptw.WAIT_GRANT) && req_port_i.data_gnt)) |=> ptw.state_q == ptw.WAIT_RVALID
+);
+
+// Additional property for flush leading to IDLE state.
+asgpt__Flush_Leading_To_IDLE: assert property (
+  disable iff (!rst_ni) 
+    flush_i |=> (ptw.state_q == ptw.IDLE || ptw.state_q == ptw.WAIT_RVALID)
+);
+
+
+
+// Property file
+
+// If PTW is active, it should not be in IDLE state.
+asgpt__active_not_idle: assert property (
+    ptw_active_o |-> ptw.state_q != IDLE
+);
+
+// If PTW is walking an instruction, it should be for an instruction.
+asgpt__walking_instruction: assert property (
+    ptw.walking_instr_o |-> ptw.is_instr_ptw_q
+);
+
+// If there is an error, PTW should either propagate the error or access error.
+asgpt__error_states: assert property (
+    ptw_error_o |-> (ptw.state_q == PROPAGATE_ERROR || ptw.state_q == PROPAGATE_ACCESS_ERROR)
+);
+
+// The data request is valid only when PTW is in the WAIT_GRANT state.
+asgpt__data_request_on_wait_grant: assert property (
+    req_port_o.data_req |-> ptw.state_q == WAIT_GRANT
+);
+
+// If data is valid from previous cycle, PTW should be in the PTE_LOOKUP state.
+asgpt__data_rvalid_in_pte_lookup: assert property (
+    ptw.data_rvalid_q |-> ptw.state_q == PTE_LOOKUP
+);
+
+// If PTW is in IDLE, then it shouldn't be active for an instruction or a data translation.
+asgpt__idle_not_active: assert property (
+    ptw.state_q == IDLE |-> (!itlb_miss_o && !dtlb_miss_o)
+);
+
+// If PTW is in the PTE_LOOKUP state and the valid bit is not set in the PTE or the read bit isn't set but write is, it should propagate an error.
+asgpt__pte_lookup_error_conditions: assert property (
+    (ptw.state_q == PTE_LOOKUP && (!pte.v || (!pte.r && pte.w))) |-> (ptw.state_d == PROPAGATE_ERROR)
+);
+
+// If PTW level is LVL1 and the lower 18 bits of pte.ppn are not zero, or if it's LVL2 and the lower 9 bits of pte.ppn are not zero, it should propagate an error.
+asgpt__invalid_ppn_bits: assert property (
+    (ptw.state_q == PTE_LOOKUP && (((ptw.ptw_lvl_q == LVL1) && (pte.ppn[17:0] != '0)) || ((ptw.ptw_lvl_q == LVL2) && (pte.ppn[8:0] != '0)))) |-> (ptw.state_d == PROPAGATE_ERROR)
+);
+
+// The physical address for PMP checking should be valid when PTW is active.
+asgpt__pmp_check_on_ptw_active: assert property (
+    ptw_active_o |-> !bad_paddr_o
+);
+
+// The privilege level sent to the PMP should always be 'S' (Supervisor) during a PTW operation.
+asgpt__pmp_priv_lvl_s: assert property (
+    ptw_active_o |-> i_pmp_ptw.priv_lvl_i == riscv::PRIV_LVL_S
+);
+
+// Whenever PTW is active, it should have the translation enabled.
+asgpt__translation_on_ptw_active: assert property (
+    ptw_active_o |-> enable_translation_i
+);
+
+// If an instruction access results in a PTW operation, it should be because of a miss in the ITLB.
+asgpt__instr_ptw_on_itlb_miss: assert property (
+    ptw.is_instr_ptw_q |-> itlb_miss_o
+);
+
+// If a data access results in a PTW operation, it should be because of a miss in the DTLB.
+asgpt__data_ptw_on_dtlb_miss: assert property (
+    !ptw.is_instr_ptw_q && ptw_active_o |-> dtlb_miss_o
+);
+
+
+
+// Property File for ptw
+
+// Asserting the PTW becomes active only if it's not in IDLE state.
+asgpt__PTW_Active_Behavior: assert property (ptw.state_q != IDLE |-> ptw_active_o);
+
+// Asserting the update virtual address.
+asgpt__Update_VAddress: assert property (update_vaddr_o == ptw.vaddr_q);
+
+// Asserting correct request address to D-Cache during PTW operation.
+asgpt__Req_Address_Check: assert property (ptw.state_q == WAIT_GRANT |-> (req_port_o.address_index == ptw.ptw_pptr_q[DCACHE_INDEX_WIDTH-1:0] && req_port_o.address_tag == ptw.ptw_pptr_q[DCACHE_INDEX_WIDTH+DCACHE_TAG_WIDTH-1:DCACHE_INDEX_WIDTH]));
+
+// Asserting that the PTW does not write to D-Cache during its operation.
+asgpt__No_Write_To_DCache: assert property (req_port_o.data_we == 0'b0);
+
+// Asserting the correctness of the PTW error signal.
+asgpt__PTW_Error_Behavior: assert property ((pte.v == 1'b0 || (pte.r == 0 && pte.w)) |-> ptw_error_o);
+
+// Asserting the global mapping behavior.
+asgpt__Global_Mapping_Behavior: assert property (pte.g |-> ptw.global_mapping_n);
+
+// Asserting proper TLB update for instructions.
+asgpt__ITLB_Update_Behavior: assert property ((ptw.is_instr_ptw_q && pte.x && pte.a) |=> itlb_update_o.valid);
+
+// Asserting proper TLB update for data.
+asgpt__DTLB_Update_Behavior: assert property ((ptw.is_instr_ptw_q == 0'b0 && pte.a && (pte.r || (pte.x && mxr_i))) |=> dtlb_update_o.valid);
+
+// Asserting that during a store operation in LSU, only writeable and dirty PTEs can be accessed.
+asgpt__Store_PTE_Check: assert property ((lsu_is_store_i && (pte.w == 0 || pte.d == 0)) |=> (dtlb_update_o.valid == 0'b0 && ptw_error_o));
+
+// Asserting the L1 PTE lookup behavior.
+asgpt__L1_PTE_Lookup_Behavior: assert property ((ptw.ptw_lvl_q == LVL1 && pte.ppn[17:0] != '0) |=> ptw_error_o);
+
+// Asserting the L2 PTE lookup behavior.
+asgpt__L2_PTE_Lookup_Behavior: assert property ((ptw.ptw_lvl_q == LVL2 && pte.ppn[8:0] != '0) |=> ptw_error_o);
+
+// Checking that the bad physical address output is only asserted during PTW access exceptions.
+asgpt__Bad_Physical_Addr: assert property (ptw_access_exception_o |-> bad_paddr_o == ptw.ptw_pptr_q);
+
+// Asserting correct behavior of PTW during PMP access checks.
+asgpt__PMP_Check: assert property (ptw_access_exception_o == !ptw.allow_access);
+
+
+
+// Property File
+
+// When in WAIT_RVALID and ptw.data_rvalid_q goes high in the next cycle, the FSM should move to the PTE_LOOKUP state
+asgpt__wait_rvalid_to_pte_lookup_transition: assert property (
+      (ptw.state_q == WAIT_RVALID && $past(ptw.data_rvalid_q)) |=> ptw.state_q == PTE_LOOKUP
+    );
+
+// When in WAIT_RVALID and ptw.data_rvalid_q remains low, FSM should remain in WAIT_RVALID
+asgpt__wait_rvalid_stays_in_same_state: assert property (
+      (ptw.state_q == WAIT_RVALID && !$past(ptw.data_rvalid_q)) |=> ptw.state_q == WAIT_RVALID
+    );
+
+// When in WAIT_RVALID state, data request should not be active as we are waiting for response
+asgpt__wait_rvalid_no_data_request: assert property (
+      (ptw.state_q == WAIT_RVALID) |-> !req_port_o.data_req
+    );
+
+// When in WAIT_RVALID, should remain as it was in the previous cycle if not ptw.data_rvalid_q
+asgpt__wait_rvalid_tag_valid_stable: assert property (
+      (ptw.state_q == WAIT_RVALID) && !ptw.data_rvalid_q |=> ptw.state_q == WAIT_RVALID
+    );
+
+// Assert that while in WAIT_RVALID, ptw_active_o (an output) should indicate the ptw is active (i.e., ptw_active_o is true)
+asgpt__wait_rvalid_ptw_active: assert property (
+      (ptw.state_q == WAIT_RVALID) |-> ptw_active_o
+    );
 
 
 
