@@ -1,2 +1,5 @@
 *_old.sv
 projs/*
+ariane/*
+*.sig~
+*.sig
