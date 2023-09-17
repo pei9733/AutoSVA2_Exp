@@ -146,4 +146,62 @@ assign miss_data = {lu_asid_i,lu_vaddr_i[38:12]};
 //====DESIGNER-ADDED-SVA====//
 
 
+// PROPERTY FILE CONTENT
+
+// Check that the lookup hits exactly once when the lu_hit_o is asserted
+asgpt__single_lookup_hit: 
+assert property (tlb.lu_hit_o |-> $countones(tlb.lu_hit) == 1);
+
+// Check that if flush is enabled and both addresses to be flushed are zero, all entries are invalidated
+asgpt__flush_all:
+assert property (tlb.flush_i & tlb.asid_to_be_flushed_is0 & tlb.vaddr_to_be_flushed_is0 
+                 |=> $countones({tlb.tags_q[TLB_ENTRIES-1:0]}) == 0);
+
+// When lookup is accessed and there's a hit, plru_tree should be updated
+asgpt__plru_tree_update:
+assert property (tlb.lu_access_i & tlb.lu_hit_o 
+                 |=> $past(tlb.plru_tree_q) !== tlb.plru_tree_n);
+
+// Check that the translation hit should update the lu_content_o to the matching content_q
+genvar i;
+generate
+    for(i=0; i<TLB_ENTRIES; i++) begin
+        asgpt__translation_content_update:
+        assert property (tlb.lu_hit[i] |-> tlb.lu_content_o == tlb.content_q[i]);
+
+		// Check that if an update is valid, the content should be updated in the next cycle for the replacing entry
+		asgpt__update_entry:
+		assert property (tlb.update_i.valid & tlb.replace_en[i]
+                 |=> tlb.content_q[i] == tlb.update_i.content && tlb.tags_q[i].valid);
+
+
+		// When a translation hit occurs with is_1G flag, the lu_is_1G_o output should also be asserted
+		asgpt__translation_is_1G:
+		assert property (tlb.lu_hit_o & tlb.tags_q[i].is_1G 
+						|-> tlb.lu_is_1G_o);
+
+		// When a translation hit occurs with is_2M flag and vpn0 matches, the lu_is_2M_o output should be asserted
+		asgpt__translation_is_2M:
+		assert property (tlb.lu_hit_o & tlb.tags_q[i].is_2M & (tlb.vpn0 == tlb.tags_q[i].vpn0) 
+						|-> tlb.lu_is_2M_o);
+    end
+endgenerate
+
+
+// Check that if a flush is active, and the vaddr_to_be_flushed matches one of the entries in the TLB, that entry should be invalidated
+generate
+    for(i=0; i<TLB_ENTRIES; i++) begin
+        asgpt__flush_single_entry:
+        assert property (tlb.flush_i & tlb.vaddr_vpn0_match[i] & tlb.vaddr_vpn1_match[i] & tlb.vaddr_vpn2_match[i] 
+                         |=> !tlb.tags_q[i].valid);
+
+
+		// When lookup hits and a global page (g flag set) matches, it should be regardless of the ASID value
+		asgpt__global_page_asid_ignore:
+		assert property (tlb.lu_hit_o & tlb.content_q[i].g 
+						|-> (tlb.lu_asid_i == tlb.tags_q[i].asid));
+    end
+endgenerate
+
+
 endmodule
